@@ -13,7 +13,7 @@ import {
 type Vec3 = { x: number; y: number; z: number };
 
 // Grid lives at integer coords 0–3; center at 1.5,1.5,0.
-// Z ranges from -1.5 to 1.5 for the depth axis.
+// Z snap zones: z < -1 → 4px, [-1,0) → 5px, [0,1) → 7px, ≥ 1 → 8px
 const GRID = { min: 0, max: 3, center: 1.5 } as const;
 const Z_EXTENT = 1.5;
 
@@ -23,11 +23,17 @@ const SVG_SPAN = VIEW_SIZE - 2 * SVG_PAD;
 
 const DOT_COUNT = 16;
 
-// Clamped size chart — back → front.  Editable for tuning.
-const DOT_SIZES = [4, 5, 7, 8] as const;
+// Clamped size chart — back → front. Editable for tuning.
+const DOT_SIZES = [6, 8, 10, 12] as const;
 
-const DOT_OPACITIES = [
+// Fallback opacity pattern (row-major 4×4).
+const DEFAULT_OPACITIES = [
   0.12, 1, 0.45, 1, 1, 0.45, 1, 0.45, 0.45, 1, 0.45, 1, 1, 0.45, 1, 0.12,
+];
+
+const THINKING_OPACITIES = [
+  0.12, 0.12, 0.45, 0.12, 0.45, 0.12, 0.45, 1, 0.12, 0.12, 1, 0.12, 0.12, 0.12,
+  1, 0.12,
 ];
 
 // ─── 3D math ─────────────────────────────────────────────────────────────────
@@ -41,7 +47,7 @@ const rotateY = ({ x, y, z }: Vec3, a: number): Vec3 => {
 // ─── Orthographic projection (drop Z, map X/Y → SVG) ────────────────────────
 
 const snapSize = (z: number): number => {
-  const t = (z + Z_EXTENT) / (2 * Z_EXTENT); // normalise to 0..1
+  const t = (z + Z_EXTENT) / (2 * Z_EXTENT);
   const idx = Math.round(Math.max(0, Math.min(1, t)) * (DOT_SIZES.length - 1));
   return DOT_SIZES[idx];
 };
@@ -71,18 +77,27 @@ const SPHERE_BASE: Vec3[] = (() => {
 
 type StateKey = "dormant" | "thinking";
 
+type Opacities = number[] | ((angle?: number) => number[]);
+
 type StateDef = {
   label: string;
   layout: (angle?: number) => Vec3[];
+  opacities: Opacities;
   animated: boolean;
   speed?: number;
 };
+
+const resolveOpacities = (o: Opacities, angle = 0): number[] =>
+  typeof o === "function" ? o(angle) : o;
+
+// Inner 2×2 block of the 4×4 grid (indices 5,6,9,10).
+const INNER = new Set([5, 6, 9, 10]);
 
 const dormantLayout = (): Vec3[] =>
   Array.from({ length: DOT_COUNT }, (_, i) => ({
     x: i % 4,
     y: Math.floor(i / 4),
-    z: 0,
+    z: INNER.has(i) ? 0.5 : -0.5,
   }));
 
 const thinkingLayout = (angle = 0): Vec3[] =>
@@ -96,10 +111,16 @@ const thinkingLayout = (angle = 0): Vec3[] =>
   });
 
 const STATES: Record<StateKey, StateDef> = {
-  dormant: { label: "Dormant", layout: dormantLayout, animated: false },
+  dormant: {
+    label: "Dormant",
+    layout: dormantLayout,
+    opacities: DEFAULT_OPACITIES,
+    animated: false,
+  },
   thinking: {
     label: "Thinking",
     layout: thinkingLayout,
+    opacities: THINKING_OPACITIES,
     animated: true,
     speed: 0.6,
   },
@@ -123,6 +144,7 @@ type DotMV = {
   cx: MotionValue<number>;
   cy: MotionValue<number>;
   r: MotionValue<number>;
+  opacity: MotionValue<number>;
 };
 
 const identity = () => Array.from({ length: DOT_COUNT }, (_, i) => i);
@@ -156,11 +178,14 @@ const DotIcon3D = ({
 
   const mvsRef = useRef<DotMV[] | null>(null);
   if (!mvsRef.current) {
-    const init = STATES[initialState].layout(0).map(project);
-    mvsRef.current = init.map((p) => ({
+    const def = STATES[initialState];
+    const proj = def.layout(0).map(project);
+    const opa = resolveOpacities(def.opacities, 0);
+    mvsRef.current = proj.map((p, i) => ({
       cx: motionValue(p.sx),
       cy: motionValue(p.sy),
       r: motionValue(p.size / 2),
+      opacity: motionValue(opa[i]),
     }));
   }
   const mvs = mvsRef.current;
@@ -176,7 +201,7 @@ const DotIcon3D = ({
   }, []);
 
   const morphTo = useCallback(
-    (targets: Projected[], onDone?: () => void) => {
+    (targets: Projected[], opacities: number[], onDone?: () => void) => {
       stopMorphs();
       mvs.forEach((mv, i) => {
         const cfg = { ...SPRING, delay: i * STAGGER };
@@ -184,7 +209,8 @@ const DotIcon3D = ({
           i === DOT_COUNT - 1 && onDone ? { ...cfg, onComplete: onDone } : cfg;
         ctrlsRef.current.push(animate(mv.cx, targets[i].sx, cfg));
         ctrlsRef.current.push(animate(mv.cy, targets[i].sy, cfg));
-        ctrlsRef.current.push(animate(mv.r, targets[i].size / 2, last));
+        ctrlsRef.current.push(animate(mv.r, targets[i].size / 2, cfg));
+        ctrlsRef.current.push(animate(mv.opacity, opacities[i], last));
       });
     },
     [mvs, stopMorphs],
@@ -210,13 +236,16 @@ const DotIcon3D = ({
         }
         const now = performance.now();
         if (tRef.current !== null) {
-          angleRef.current += (def.speed ?? 0.6) * ((now - tRef.current) / 1000);
+          angleRef.current +=
+            (def.speed ?? 0.6) * ((now - tRef.current) / 1000);
           const proj = def.layout(angleRef.current).map(project);
+          const opa = resolveOpacities(def.opacities, angleRef.current);
 
           proj.forEach((p, i) => {
             mvs[i].cx.set(p.sx);
             mvs[i].cy.set(p.sy);
             mvs[i].r.set(p.size / 2);
+            mvs[i].opacity.set(opa[i]);
           });
 
           const order = sortByZ(proj);
@@ -240,18 +269,18 @@ const DotIcon3D = ({
     setPaintOrder(identity());
     angleRef.current = 0;
 
-    const world = def.layout(0);
-    const proj = world.map(project);
+    const proj = def.layout(0).map(project);
+    const opa = resolveOpacities(def.opacities, 0);
 
     if (def.animated) {
-      morphTo(proj, () => {
+      morphTo(proj, opa, () => {
         if (stateRef.current !== activeState) return;
         setPaintOrder(sortByZ(proj));
         setSpinning(true);
         startLoop(activeState, def);
       });
     } else {
-      morphTo(proj);
+      morphTo(proj, opa);
     }
 
     return () => {
@@ -292,7 +321,7 @@ const DotIcon3D = ({
             cy={mvs[i].cy}
             r={mvs[i].r}
             fill="currentColor"
-            fillOpacity={DOT_OPACITIES[i]}
+            fillOpacity={mvs[i].opacity}
           />
         ))}
       </svg>
@@ -330,9 +359,7 @@ const DotIcon3D = ({
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
                 border: "1px solid",
-                borderColor: active
-                  ? "currentColor"
-                  : "rgba(128,128,128,0.3)",
+                borderColor: active ? "currentColor" : "rgba(128,128,128,0.3)",
                 background: active ? "currentColor" : "transparent",
                 borderRadius: 4,
                 cursor: "pointer",

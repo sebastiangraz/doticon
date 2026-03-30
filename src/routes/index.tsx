@@ -6,7 +6,7 @@ export const Route = createFileRoute("/")({
     <>
       <DotIcon />
       <h1>DotIcon3D</h1>
-      <DotIcon3D />
+      <DotIcon3D size={100} />
     </>
   ),
 });
