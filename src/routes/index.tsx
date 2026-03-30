@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { AnimatePresence, motion } from "motion/react";
 import ExposeProps from "#/components/ExposeProps/ExposeProps";
 import DotIcon, {
   getStateLabel,

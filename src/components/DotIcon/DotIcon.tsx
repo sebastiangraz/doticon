@@ -128,7 +128,7 @@ LOADING_FILL_ORDER.forEach((dotIdx, rank) => {
   LOADING_DOT_RANK[dotIdx] = rank;
 });
 
-const LOADING_PAUSE = 0; // extra units after last dot fills
+const LOADING_PAUSE = 2; // extra units after last dot fills
 const LOADING_CYCLE = DOT_COUNT + LOADING_PAUSE; // 20 units per loop
 const LOADING_TRAIL_STEPS = 12; // ranks until trail reaches min
 const LOADING_FILLED_OPACITY_MIN = 0.32;
