@@ -25,10 +25,18 @@ const DEFAULT_OPACITIES = [
   0.12, 1, 0.45, 1, 1, 0.45, 1, 0.45, 0.45, 1, 0.45, 1, 1, 0.45, 1, 0.12,
 ];
 
-const THINKING_OPACITIES = [
-  0.12, 0.12, 0.45, 0.12, 0.45, 0.12, 0.45, 1, 0.12, 0.12, 1, 0.12, 0.12, 0.12,
-  1, 0.12,
-];
+// Thinking: one sine wave along Fibonacci spiral index order; +0.5 = 50% path offset; `opacityAngle` is advanced by `opacitySpeed` (rad/s), independent of layout rotation.
+const THINKING_OPACITY_MIN = 0.12;
+const THINKING_OPACITY_MAX = 1;
+
+const thinkingOpacities = (opacityAngle = 0): number[] =>
+  Array.from({ length: DOT_COUNT }, (_, i) => {
+    const u = (i / DOT_COUNT + 0.5) % 1;
+    const w = 0.5 + 0.5 * Math.sin(2 * Math.PI * u + opacityAngle);
+    return (
+      THINKING_OPACITY_MIN + (THINKING_OPACITY_MAX - THINKING_OPACITY_MIN) * w
+    );
+  });
 
 // ─── 3D math ─────────────────────────────────────────────────────────────────
 
@@ -78,7 +86,10 @@ type StateDef = {
   layout: (angle?: number) => Vec3[];
   opacities: Opacities;
   animated: boolean;
-  speed?: number;
+  /** Radians per second — passed to `layout()` (3D spin). */
+  layoutSpeed?: number;
+  /** Radians per second — phase for functional opacities (e.g. `thinkingOpacities`). Defaults to `layoutSpeed` when omitted. */
+  opacitySpeed?: number;
 };
 
 const resolveOpacities = (o: Opacities, angle = 0): number[] =>
@@ -114,9 +125,10 @@ const STATES: Record<StateKey, StateDef> = {
   thinking: {
     label: "Thinking",
     layout: thinkingLayout,
-    opacities: THINKING_OPACITIES,
+    opacities: thinkingOpacities,
     animated: true,
-    speed: 0.2,
+    layoutSpeed: 3,
+    opacitySpeed: 4,
   },
 };
 
@@ -208,7 +220,8 @@ const DotIcon3D = ({
   const mvs = mvsRef.current;
 
   const rafRef = useRef<number | null>(null);
-  const angleRef = useRef(0);
+  const layoutAngleRef = useRef(0);
+  const opacityAngleRef = useRef(0);
   const tRef = useRef<number | null>(null);
   const ctrlsRef = useRef<{ stop: () => void }[]>([]);
 
@@ -259,7 +272,10 @@ const DotIcon3D = ({
         if (tRef.current !== null) {
           const dt = (now - tRef.current) / 1000;
           elapsed += dt;
-          angleRef.current += (def.speed ?? 0.6) * dt;
+          const layoutSpeed = def.layoutSpeed ?? 0.6;
+          const opacitySpeed = def.opacitySpeed ?? layoutSpeed;
+          layoutAngleRef.current += layoutSpeed * dt;
+          opacityAngleRef.current += opacitySpeed * dt;
 
           if (blends) {
             for (let i = 0; i < DOT_COUNT; i++) {
@@ -272,8 +288,8 @@ const DotIcon3D = ({
             }
           }
 
-          const proj = def.layout(angleRef.current).map(project);
-          const opa = resolveOpacities(def.opacities, angleRef.current);
+          const proj = def.layout(layoutAngleRef.current).map(project);
+          const opa = resolveOpacities(def.opacities, opacityAngleRef.current);
 
           proj.forEach((p, i) => {
             const tx = p.sx;
@@ -316,7 +332,8 @@ const DotIcon3D = ({
 
     stopLoop();
     stopAnims();
-    angleRef.current = 0;
+    layoutAngleRef.current = 0;
+    opacityAngleRef.current = 0;
 
     if (def.animated) {
       const src: Snapshot[] = mvs.map((mv) => ({
