@@ -128,11 +128,11 @@ export const getStateLabel = (key: StateKey): string => STATES[key].label;
 
 const SPRING = {
   type: "spring" as const,
-  stiffness: 120,
+  stiffness: 100,
   damping: 18,
   mass: 0.8,
 };
-const STAGGER = 0.025;
+const STAGGER = 0.035;
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -143,6 +143,8 @@ type DotMV = {
   opacity: MotionValue<number>;
 };
 
+type Snapshot = { sx: number; sy: number; r: number; opacity: number };
+
 const identity = () => Array.from({ length: DOT_COUNT }, (_, i) => i);
 
 const sortByZ = (proj: Projected[]): number[] =>
@@ -151,6 +153,23 @@ const sortByZ = (proj: Projected[]): number[] =>
 const orderEq = (a: number[], b: number[]) => {
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
+};
+
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+// Semi-implicit Euler step for a spring toward target = 1.
+// Runs inside the rAF tick so it shares the exact same dt.
+const stepBlend = (
+  val: number,
+  vel: number,
+  dt: number,
+): { val: number; vel: number } => {
+  const force = -SPRING.stiffness * (val - 1) - SPRING.damping * vel;
+  const nv = vel + (force / SPRING.mass) * dt;
+  const np = val + nv * dt;
+  if (Math.abs(np - 1) < 0.001 && Math.abs(nv) < 0.01)
+    return { val: 1, vel: 0 };
+  return { val: np, vel: nv };
 };
 
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
@@ -190,25 +209,23 @@ const DotIcon3D = ({
   const tRef = useRef<number | null>(null);
   const ctrlsRef = useRef<{ stop: () => void }[]>([]);
 
-  const stopMorphs = useCallback(() => {
+  const stopAnims = useCallback(() => {
     ctrlsRef.current.forEach((c) => c.stop());
     ctrlsRef.current = [];
   }, []);
 
   const morphTo = useCallback(
-    (targets: Projected[], opacities: number[], onDone?: () => void) => {
-      stopMorphs();
+    (targets: Projected[], opacities: number[]) => {
+      stopAnims();
       mvs.forEach((mv, i) => {
         const cfg = { ...SPRING, delay: i * STAGGER };
-        const last =
-          i === DOT_COUNT - 1 && onDone ? { ...cfg, onComplete: onDone } : cfg;
         ctrlsRef.current.push(animate(mv.cx, targets[i].sx, cfg));
         ctrlsRef.current.push(animate(mv.cy, targets[i].sy, cfg));
         ctrlsRef.current.push(animate(mv.r, targets[i].size / 2, cfg));
-        ctrlsRef.current.push(animate(mv.opacity, opacities[i], last));
+        ctrlsRef.current.push(animate(mv.opacity, opacities[i], cfg));
       });
     },
-    [mvs, stopMorphs],
+    [mvs, stopAnims],
   );
 
   const stopLoop = useCallback(() => {
@@ -220,9 +237,15 @@ const DotIcon3D = ({
   }, []);
 
   const startLoop = useCallback(
-    (key: StateKey, def: StateDef) => {
+    (key: StateKey, def: StateDef, sources?: Snapshot[]) => {
       if (rafRef.current) return;
       tRef.current = null;
+
+      // Per-dot blend springs, computed in-loop so they share the same dt.
+      const blends = sources
+        ? Array.from({ length: DOT_COUNT }, () => ({ val: 0, vel: 0 }))
+        : null;
+      let elapsed = 0;
 
       const tick = () => {
         if (stateRef.current !== key) {
@@ -231,16 +254,43 @@ const DotIcon3D = ({
         }
         const now = performance.now();
         if (tRef.current !== null) {
-          angleRef.current +=
-            (def.speed ?? 0.6) * ((now - tRef.current) / 1000);
+          const dt = (now - tRef.current) / 1000;
+          elapsed += dt;
+          angleRef.current += (def.speed ?? 0.6) * dt;
+
+          if (blends) {
+            for (let i = 0; i < DOT_COUNT; i++) {
+              const b = blends[i];
+              if (b.val < 1 && elapsed >= i * STAGGER) {
+                const next = stepBlend(b.val, b.vel, dt);
+                b.val = next.val;
+                b.vel = next.vel;
+              }
+            }
+          }
+
           const proj = def.layout(angleRef.current).map(project);
           const opa = resolveOpacities(def.opacities, angleRef.current);
 
           proj.forEach((p, i) => {
-            mvs[i].cx.set(p.sx);
-            mvs[i].cy.set(p.sy);
-            mvs[i].r.set(p.size / 2);
-            mvs[i].opacity.set(opa[i]);
+            const tx = p.sx;
+            const ty = p.sy;
+            const tr = p.size / 2;
+            const to = opa[i];
+
+            if (sources && blends) {
+              const b = blends[i].val;
+              const s = sources[i];
+              mvs[i].cx.set(lerp(s.sx, tx, b));
+              mvs[i].cy.set(lerp(s.sy, ty, b));
+              mvs[i].r.set(lerp(s.r, tr, b));
+              mvs[i].opacity.set(lerp(s.opacity, to, b));
+            } else {
+              mvs[i].cx.set(tx);
+              mvs[i].cy.set(ty);
+              mvs[i].r.set(tr);
+              mvs[i].opacity.set(to);
+            }
           });
 
           const order = sortByZ(proj);
@@ -260,29 +310,33 @@ const DotIcon3D = ({
     const def = STATES[state];
 
     stopLoop();
-    setSpinning(false);
-    setPaintOrder(identity());
+    stopAnims();
     angleRef.current = 0;
 
-    const proj = def.layout(0).map(project);
-    const opa = resolveOpacities(def.opacities, 0);
-
     if (def.animated) {
-      morphTo(proj, opa, () => {
-        if (stateRef.current !== state) return;
-        setPaintOrder(sortByZ(proj));
-        setSpinning(true);
-        startLoop(state, def);
-      });
+      const src: Snapshot[] = mvs.map((mv) => ({
+        sx: mv.cx.get(),
+        sy: mv.cy.get(),
+        r: mv.r.get(),
+        opacity: mv.opacity.get(),
+      }));
+
+      setSpinning(true);
+      setPaintOrder(identity());
+      startLoop(state, def, src);
     } else {
+      setSpinning(false);
+      setPaintOrder(identity());
+      const proj = def.layout(0).map(project);
+      const opa = resolveOpacities(def.opacities, 0);
       morphTo(proj, opa);
     }
 
     return () => {
-      stopMorphs();
+      stopAnims();
       stopLoop();
     };
-  }, [state, morphTo, startLoop, stopLoop, stopMorphs]);
+  }, [state, morphTo, startLoop, stopLoop, stopAnims, mvs]);
 
   useEffect(() => () => stopLoop(), [stopLoop]);
 
