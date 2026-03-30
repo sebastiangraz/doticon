@@ -179,7 +179,7 @@ const STATES: Record<StateKey, StateDef> = {
     layout: loadingLayout,
     opacities: loadingOpacities,
     animated: true,
-    layoutSpeed: 6,
+    layoutSpeed: 12,
   },
 };
 
