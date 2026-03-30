@@ -1,6 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { CSSProperties } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import {
+  motion,
+  AnimatePresence,
+  animate,
+  motionValue,
+  type MotionValue,
+} from "motion/react";
 
 /*
  * ─── DOT OPACITY PATTERN ───
@@ -147,6 +153,24 @@ const dotSpring = {
 };
 const staggerDelay = 0.025;
 
+type DotMotion = {
+  cx: MotionValue<number>;
+  cy: MotionValue<number>;
+  r: MotionValue<number>;
+};
+
+const identityOrder = () =>
+  Array.from({ length: DOT_COUNT }, (_, i) => i);
+
+const sortIndicesByZ = (layout: Dot[]): number[] =>
+  identityOrder().sort((a, b) => (layout[a].z ?? 0) - (layout[b].z ?? 0));
+
+const sameOrder = (a: number[], b: number[]) => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+};
+
 /*
  * ─── COMPONENT ───
  */
@@ -164,36 +188,101 @@ export default function DotIcon({
   const [activeState, setActiveState] = useState<StateKey>(initialState);
   const stateDef = (STATES[activeState] ?? STATES.dormant) as StateDef;
 
-  // Transition phase: "morphing" (spring into sphere shape) → "spinning" (rAF loop)
-  const [phase, setPhase] = useState(stateDef.animated ? "spinning" : "static");
-  const [dots, setDots] = useState<Dot[]>(() =>
-    stateDef.animated ? stateDef.layout(0) : stateDef.layout(),
-  );
+  /** True only while the rAF globe loop is running (not during morph into thinking). */
+  const [isSpinning, setIsSpinning] = useState(false);
+  /** Z-order for SVG paint order while spinning; identity order otherwise. */
+  const [spinOrder, setSpinOrder] = useState<number[]>(identityOrder);
+
+  const activeStateRef = useRef(activeState);
+  activeStateRef.current = activeState;
+
+  const dotMotionsRef = useRef<DotMotion[] | null>(null);
+  const ensureDotMotions = (): DotMotion[] => {
+    if (!dotMotionsRef.current) {
+      const initialDots = STATES[initialState].animated
+        ? thinkingLayout(0)
+        : dormantLayout();
+      dotMotionsRef.current = initialDots.map((d) => ({
+        cx: motionValue(d.x),
+        cy: motionValue(d.y),
+        r: motionValue(d.size / 2),
+      }));
+    }
+    return dotMotionsRef.current;
+  };
+  const dotMotions = ensureDotMotions();
 
   const rafRef = useRef<number | null>(null);
   const angleRef = useRef(0);
   const prevTimeRef = useRef<number | null>(null);
   const animatedLayoutRef = useRef<((angle?: number) => Dot[]) | null>(null);
   const animatedSpeedRef = useRef<number>(0.6);
+  const runningAnimControlsRef = useRef<Array<{ stop: () => void }>>([]);
 
-  // rAF tick for animated states
-  const tick = useCallback(() => {
-    const now = performance.now();
-    if (prevTimeRef.current !== null) {
-      const dt = (now - prevTimeRef.current) / 1000;
-      angleRef.current += animatedSpeedRef.current * dt;
-      const layout = animatedLayoutRef.current;
-      if (layout) setDots(layout(angleRef.current));
-    }
-    prevTimeRef.current = now;
-    rafRef.current = requestAnimationFrame(tick);
+  const stopAllMorphAnimations = useCallback(() => {
+    runningAnimControlsRef.current.forEach((c) => c.stop());
+    runningAnimControlsRef.current = [];
   }, []);
+
+  const trackAnim = useCallback((control: { stop: () => void }) => {
+    runningAnimControlsRef.current.push(control);
+  }, []);
+
+  const morphToLayout = useCallback(
+    (
+      targets: Dot[],
+      onLastDotComplete?: () => void,
+    ) => {
+      stopAllMorphAnimations();
+      dotMotions.forEach((d, i) => {
+        const base = {
+          ...dotSpring,
+          delay: i * staggerDelay,
+        };
+        const onLast =
+          i === DOT_COUNT - 1 && onLastDotComplete
+            ? { ...base, onComplete: onLastDotComplete }
+            : base;
+        trackAnim(animate(d.cx, targets[i].x, base));
+        trackAnim(animate(d.cy, targets[i].y, base));
+        trackAnim(animate(d.r, targets[i].size / 2, onLast));
+      });
+    },
+    [dotMotions, stopAllMorphAnimations, trackAnim],
+  );
 
   const startLoop = useCallback(() => {
     if (rafRef.current) return;
     prevTimeRef.current = null;
-    rafRef.current = requestAnimationFrame(tick);
-  }, [tick]);
+    const loop = () => {
+      if (
+        activeStateRef.current !== "thinking" ||
+        !animatedLayoutRef.current
+      ) {
+        rafRef.current = null;
+        prevTimeRef.current = null;
+        return;
+      }
+      const now = performance.now();
+      if (prevTimeRef.current !== null) {
+        const dt = (now - prevTimeRef.current) / 1000;
+        angleRef.current += animatedSpeedRef.current * dt;
+        const layout = animatedLayoutRef.current(angleRef.current);
+        layout.forEach((pt, i) => {
+          dotMotions[i].cx.set(pt.x);
+          dotMotions[i].cy.set(pt.y);
+          dotMotions[i].r.set(pt.size / 2);
+        });
+        const nextOrder = sortIndicesByZ(layout);
+        setSpinOrder((prev) =>
+          sameOrder(prev, nextOrder) ? prev : nextOrder,
+        );
+      }
+      prevTimeRef.current = now;
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+  }, [dotMotions]);
 
   const stopLoop = useCallback(() => {
     if (rafRef.current) {
@@ -210,40 +299,51 @@ export default function DotIcon({
       animatedLayoutRef.current = def.layout;
       animatedSpeedRef.current = def.speed;
 
-      // Step 1: set target positions (sphere at angle 0) for the spring morph
-      setDots(def.layout(angleRef.current));
-      setPhase("morphing");
+      setIsSpinning(false);
+      setSpinOrder(identityOrder());
+      stopLoop();
 
-      // Step 2: after springs settle (~500ms), switch to rAF-driven spinning
-      const timeout = setTimeout(() => {
-        setPhase("spinning");
+      angleRef.current = 0;
+      const targets = def.layout(0);
+
+      morphToLayout(targets, () => {
+        if (activeStateRef.current !== "thinking") return;
+        setSpinOrder(sortIndicesByZ(targets));
+        setIsSpinning(true);
         startLoop();
-      }, 500);
+      });
 
       return () => {
-        clearTimeout(timeout);
+        stopAllMorphAnimations();
         stopLoop();
       };
-    } else {
-      // Static state
-      animatedLayoutRef.current = null;
-      stopLoop();
-      setDots(def.layout());
-      setPhase("static");
     }
-  }, [activeState, startLoop, stopLoop]);
 
-  // Cleanup on unmount
+    animatedLayoutRef.current = null;
+    setIsSpinning(false);
+    setSpinOrder(identityOrder());
+    stopLoop();
+
+    const targets = def.layout();
+    morphToLayout(targets);
+
+    return () => {
+      stopAllMorphAnimations();
+      stopLoop();
+    };
+  }, [
+    activeState,
+    morphToLayout,
+    startLoop,
+    stopLoop,
+    stopAllMorphAnimations,
+  ]);
+
   useEffect(() => () => stopLoop(), [stopLoop]);
 
   const viewSize = 100;
 
-  // For the spinning phase, sort by Z so front dots layer on top
-  const indexedDots = dots.map((d, i) => ({ ...d, i }));
-  const sortedDots =
-    phase === "spinning"
-      ? [...indexedDots].sort((a, b) => (a.z ?? 0) - (b.z ?? 0))
-      : indexedDots;
+  const displayOrder = isSpinning ? spinOrder : identityOrder();
 
   return (
     <div
@@ -264,25 +364,14 @@ export default function DotIcon({
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: "visible" }}
       >
-        {sortedDots.map(({ x, y, size: s, i }) => (
+        {displayOrder.map((i) => (
           <motion.circle
             key={i}
+            cx={dotMotions[i].cx}
+            cy={dotMotions[i].cy}
+            r={dotMotions[i].r}
             fill="currentColor"
             fillOpacity={DOT_OPACITIES[i]}
-            initial={false}
-            animate={{
-              cx: x,
-              cy: y,
-              r: s / 2,
-            }}
-            transition={
-              phase === "spinning"
-                ? { duration: 0 }
-                : {
-                    ...dotSpring,
-                    delay: i * staggerDelay,
-                  }
-            }
           />
         ))}
       </svg>
