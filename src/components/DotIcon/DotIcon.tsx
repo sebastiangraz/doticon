@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import type { CSSProperties } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
 /*
@@ -25,9 +26,12 @@ const MAX_DOT_SIZE = 7;
  * Pre-compute base Fibonacci sphere positions.
  * These get rotated around Y at runtime for the globe spin.
  */
+type Point3D = { x: number; y: number; z: number };
+type Dot = { x: number; y: number; size: number; z?: number };
+
 const SPHERE_POINTS = (() => {
   const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-  const pts = [];
+  const pts: Point3D[] = [];
   for (let i = 0; i < DOT_COUNT; i++) {
     const yNorm = 1 - (i / (DOT_COUNT - 1)) * 2;
     const radiusAtY = Math.sqrt(1 - yNorm * yNorm);
@@ -41,7 +45,7 @@ const SPHERE_POINTS = (() => {
   return pts;
 })();
 
-function rotateY(pt, angle) {
+const rotateY = (pt: Point3D, angle: number): Point3D => {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
   return {
@@ -49,9 +53,9 @@ function rotateY(pt, angle) {
     y: pt.y,
     z: -pt.x * sin + pt.z * cos,
   };
-}
+};
 
-function projectDot(pt3d) {
+const projectDot = (pt3d: Point3D): Dot => {
   const spread = 28;
   const cx = 50;
   const cy = 50;
@@ -62,7 +66,7 @@ function projectDot(pt3d) {
     z: pt3d.z,
     size: MIN_DOT_SIZE + t * (MAX_DOT_SIZE - MIN_DOT_SIZE),
   };
-}
+};
 
 /*
  * ─── STATE DEFINITIONS ───
@@ -75,7 +79,7 @@ function projectDot(pt3d) {
  *   speed     — radians/sec (only meaningful when animated: true)
  */
 
-function dormantLayout() {
+const dormantLayout = (): Dot[] => {
   const cols = 4;
   const spacing = 16;
   const offset = 20;
@@ -84,14 +88,14 @@ function dormantLayout() {
     y: offset + Math.floor(i / cols) * spacing,
     size: 5.5,
   }));
-}
+};
 
-function thinkingLayout(angle = 0) {
+const thinkingLayout = (angle = 0): Dot[] => {
   return SPHERE_POINTS.map((pt) => {
     const rotated = rotateY(pt, angle);
     return projectDot(rotated);
   });
-}
+};
 
 const STATES = {
   dormant: {
@@ -110,13 +114,26 @@ const STATES = {
   // error:     { label: "Error",     layout: errorLayout,     animated: true, speed: 2 },
 };
 
-const STATE_KEYS = Object.keys(STATES);
+type StateKey = keyof typeof STATES;
+const STATE_KEYS = Object.keys(STATES) as StateKey[];
+type DormantState = {
+  label: string;
+  layout: () => Dot[];
+  animated: false;
+};
+type AnimatedState = {
+  label: string;
+  layout: (angle?: number) => Dot[];
+  animated: true;
+  speed: number;
+};
+type StateDef = DormantState | AnimatedState;
 
 /*
  * ─── SPRING CONFIG (for state-transition morphs) ───
  */
 const dotSpring = {
-  type: "spring",
+  type: "spring" as const,
   stiffness: 120,
   damping: 18,
   mass: 0.8,
@@ -133,32 +150,33 @@ export default function DotIcon({
   style,
 }: {
   size?: number;
-  initialState?: string;
+  initialState?: StateKey;
   color?: string;
-  style?: React.CSSProperties;
+  style?: CSSProperties;
 }) {
-  const [activeState, setActiveState] = useState(initialState);
-  const stateDef = STATES[activeState] ?? STATES.dormant;
+  const [activeState, setActiveState] = useState<StateKey>(initialState);
+  const stateDef = (STATES[activeState] ?? STATES.dormant) as StateDef;
 
   // Transition phase: "morphing" (spring into sphere shape) → "spinning" (rAF loop)
   const [phase, setPhase] = useState(stateDef.animated ? "spinning" : "static");
-  const [dots, setDots] = useState(() => stateDef.layout(0));
+  const [dots, setDots] = useState<Dot[]>(() => stateDef.layout(0));
 
-  const rafRef = useRef(null);
+  const rafRef = useRef<number | null>(null);
   const angleRef = useRef(0);
-  const prevTimeRef = useRef(null);
+  const prevTimeRef = useRef<number | null>(null);
 
   // rAF tick for animated states
   const tick = useCallback(() => {
     const now = performance.now();
     if (prevTimeRef.current !== null) {
       const dt = (now - prevTimeRef.current) / 1000;
-      angleRef.current += (STATES[activeState]?.speed ?? 0.6) * dt;
+      angleRef.current +=
+        (stateDef.animated ? stateDef.speed : 0.6) * dt;
       setDots(thinkingLayout(angleRef.current));
     }
     prevTimeRef.current = now;
     rafRef.current = requestAnimationFrame(tick);
-  }, [activeState]);
+  }, [stateDef]);
 
   const startLoop = useCallback(() => {
     if (rafRef.current) return;
