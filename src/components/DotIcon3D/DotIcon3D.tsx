@@ -77,7 +77,7 @@ const SPHERE_BASE: Vec3[] = (() => {
 
 // ─── STATE SYSTEM ────────────────────────────────────────────────────────────
 
-export type StateKey = "dormant" | "thinking";
+export type StateKey = "dormant" | "thinking" | "loading";
 
 type Opacities = number[] | ((angle?: number) => number[]);
 
@@ -115,6 +115,50 @@ const thinkingLayout = (angle = 0): Vec3[] =>
     };
   });
 
+// ─── Loading state ────────────────────────────────────────────────────────────
+// Fill order: column by column (x=0→3), bottom-to-top within each column (y=3→0).
+// Grid is row-major: index i → x = i%4, y = floor(i/4), so y=3 is visual bottom.
+const LOADING_FILL_ORDER = [
+  12, 8, 4, 0, 13, 9, 5, 1, 14, 10, 6, 2, 15, 11, 7, 3,
+];
+
+// Inverse map: dot index → its rank in the fill sequence.
+const LOADING_DOT_RANK: number[] = new Array(DOT_COUNT);
+LOADING_FILL_ORDER.forEach((dotIdx, rank) => {
+  LOADING_DOT_RANK[dotIdx] = rank;
+});
+
+const LOADING_PAUSE = 0; // extra units after last dot fills
+const LOADING_CYCLE = DOT_COUNT + LOADING_PAUSE; // 20 units per loop
+const LOADING_TRAIL_STEPS = 12; // ranks until trail reaches min
+const LOADING_FILLED_OPACITY_MIN = 0.32;
+
+// Each dot independently tracks how long ago it was most recently filled,
+// so loop transitions are seamless — no global phase reset.
+const loadingTimeSinceFill = (angle: number, rank: number): number => {
+  if (angle < rank) return Infinity; // not yet reached on first pass
+  return (angle - rank) % LOADING_CYCLE;
+};
+
+const loadingLayout = (angle = 0): Vec3[] =>
+  Array.from({ length: DOT_COUNT }, (_, i) => {
+    const age = loadingTimeSinceFill(angle, LOADING_DOT_RANK[i]);
+    const trailT = Math.min(age / LOADING_TRAIL_STEPS, 1);
+    return {
+      x: i % 4,
+      y: Math.floor(i / 4),
+      z: age < DOT_COUNT ? lerp(Z_EXTENT, -0.5, trailT) : -0.5,
+    };
+  });
+
+const loadingOpacities = (angle = 0): number[] =>
+  Array.from({ length: DOT_COUNT }, (_, i) => {
+    const age = loadingTimeSinceFill(angle, LOADING_DOT_RANK[i]);
+    if (age >= DOT_COUNT) return 0.12;
+    const trailT = Math.min(age / LOADING_TRAIL_STEPS, 1);
+    return lerp(1, LOADING_FILLED_OPACITY_MIN, trailT);
+  });
+
 const STATES: Record<StateKey, StateDef> = {
   dormant: {
     label: "Dormant",
@@ -129,6 +173,13 @@ const STATES: Record<StateKey, StateDef> = {
     animated: true,
     layoutSpeed: 3,
     opacitySpeed: 4,
+  },
+  loading: {
+    label: "Loading",
+    layout: loadingLayout,
+    opacities: loadingOpacities,
+    animated: true,
+    layoutSpeed: 6,
   },
 };
 
