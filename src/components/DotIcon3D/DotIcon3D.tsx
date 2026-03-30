@@ -134,6 +134,9 @@ const SPRING = {
 };
 const STAGGER = 0.035;
 
+/** Seconds — eases discrete Z→radius steps while the sphere spins (imperative MV updates skip CSS/Motion transitions). */
+const RADIUS_SMOOTH_TAU_S = 0.2;
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 type DotMV = {
@@ -278,17 +281,19 @@ const DotIcon3D = ({
             const tr = p.size / 2;
             const to = opa[i];
 
+            const rAlpha = 1 - Math.exp(-dt / RADIUS_SMOOTH_TAU_S);
             if (sources && blends) {
               const b = blends[i].val;
               const s = sources[i];
               mvs[i].cx.set(lerp(s.sx, tx, b));
               mvs[i].cy.set(lerp(s.sy, ty, b));
-              mvs[i].r.set(lerp(s.r, tr, b));
+              const desiredR = lerp(s.r, tr, b);
+              mvs[i].r.set(lerp(mvs[i].r.get(), desiredR, rAlpha));
               mvs[i].opacity.set(lerp(s.opacity, to, b));
             } else {
               mvs[i].cx.set(tx);
               mvs[i].cy.set(ty);
-              mvs[i].r.set(tr);
+              mvs[i].r.set(lerp(mvs[i].r.get(), tr, rAlpha));
               mvs[i].opacity.set(to);
             }
           });
