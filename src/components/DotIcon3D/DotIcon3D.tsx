@@ -116,7 +116,7 @@ const STATES: Record<StateKey, StateDef> = {
     layout: thinkingLayout,
     opacities: THINKING_OPACITIES,
     animated: true,
-    speed: 0.6,
+    speed: 0.2,
   },
 };
 
