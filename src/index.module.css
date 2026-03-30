@@ -13,3 +13,20 @@
     text-transform: uppercase;
   }
 }
+.prop {
+  --sizeX: 1rlh;
+  --sizeY: 1rlh;
+
+  overflow: hidden;
+  font-size: 0.7rlh;
+  line-height: 1.5;
+  min-height: 4rlh;
+  background-position: calc(1rlh - 1px) calc(1rlh - 1px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0px 0px 0px 1px #0002 inset;
+  & > * {
+    padding: 1rlh;
+    flex: 1 0 auto;
+  }
+}

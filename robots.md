@@ -1,4 +1,4 @@
-## DotIcon3D — a state-machine icon built on a native 3D coordinate system, rendered as SVG.
+## DotIcon — a state-machine icon built on a native 3D coordinate system, rendered as SVG.
 
 ## Core concept:
 

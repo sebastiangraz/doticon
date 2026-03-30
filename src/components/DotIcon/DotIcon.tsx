@@ -1,437 +1,452 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { CSSProperties } from "react";
-import {
-  motion,
-  AnimatePresence,
-  animate,
-  motionValue,
-  type MotionValue,
-} from "motion/react";
+import { motion, animate, motionValue, type MotionValue } from "motion/react";
 
-/*
- * ─── DOT OPACITY PATTERN ───
- * Each dot uses fill="currentColor" with a fixed opacity identity.
- * The parent controls color via CSS `color` prop or inheritance.
- *
- * Derived from the reference image (4×4 grid, row-major):
- *   Row 0: light, full, light, full
- *   Row 1: full,  full, full,  full
- *   Row 2: full,  full, light, light
- *   Row 3: full,  light, full, light
- */
-const DOT_OPACITIES = [
-  // Dormant reference image has 3 levels (row-major 4×4):
-  // veryLight, full, mid, full
-  // full,      mid,  full, mid
-  // mid,       full, mid,  full
-  // full,      mid,  full, veryLight
+// ─── 3D ENGINE ───────────────────────────────────────────────────────────────
+
+type Vec3 = { x: number; y: number; z: number };
+
+// Grid lives at integer coords 0–3; center at 1.5,1.5,0.
+// Z snap zones: z < -1 → 4px, [-1,0) → 5px, [0,1) → 7px, ≥ 1 → 8px
+const GRID = { min: 0, max: 3, center: 1.5 } as const;
+const Z_EXTENT = 1.5;
+
+const VIEW_SIZE = 100;
+const SVG_PAD = 18;
+const SVG_SPAN = VIEW_SIZE - 2 * SVG_PAD;
+
+const DOT_COUNT = 16;
+
+// Clamped size chart — back → front. Editable for tuning.
+const DOT_SIZES = [6, 8, 10, 12] as const;
+
+// Fallback opacity pattern (row-major 4×4).
+const DEFAULT_OPACITIES = [
   0.12, 1, 0.45, 1, 1, 0.45, 1, 0.45, 0.45, 1, 0.45, 1, 1, 0.45, 1, 0.12,
 ];
 
-const DOT_COUNT = 16;
-const MIN_DOT_SIZE = 4;
-const MAX_DOT_SIZE = 7;
+// Thinking: one sine wave along Fibonacci spiral index order; +0.5 = 50% path offset; `opacityAngle` is advanced by `opacitySpeed` (rad/s), independent of layout rotation.
+const THINKING_OPACITY_MIN = 0.12;
+const THINKING_OPACITY_MAX = 1;
 
-/*
- * ─── SPHERE GEOMETRY ───
- * Pre-compute base Fibonacci sphere positions.
- * These get rotated around Y at runtime for the globe spin.
- */
-type Point3D = { x: number; y: number; z: number };
-type Dot = { x: number; y: number; size: number; z?: number };
+const thinkingOpacities = (opacityAngle = 0): number[] =>
+  Array.from({ length: DOT_COUNT }, (_, i) => {
+    const u = (i / DOT_COUNT + 0.5) % 1;
+    const w = 0.5 + 0.5 * Math.sin(2 * Math.PI * u + opacityAngle);
+    return (
+      THINKING_OPACITY_MIN + (THINKING_OPACITY_MAX - THINKING_OPACITY_MIN) * w
+    );
+  });
 
-const SPHERE_POINTS = (() => {
-  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-  const pts: Point3D[] = [];
-  for (let i = 0; i < DOT_COUNT; i++) {
-    const yNorm = 1 - (i / (DOT_COUNT - 1)) * 2;
-    const radiusAtY = Math.sqrt(1 - yNorm * yNorm);
-    const theta = goldenAngle * i;
-    pts.push({
-      x: Math.cos(theta) * radiusAtY,
-      y: yNorm,
-      z: Math.sin(theta) * radiusAtY,
-    });
-  }
-  return pts;
+// ─── 3D math ─────────────────────────────────────────────────────────────────
+
+const rotateY = ({ x, y, z }: Vec3, a: number): Vec3 => {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return { x: x * c + z * s, y, z: -x * s + z * c };
+};
+
+// ─── Orthographic projection (drop Z, map X/Y → SVG) ────────────────────────
+
+const snapSize = (z: number): number => {
+  const t = (z + Z_EXTENT) / (2 * Z_EXTENT);
+  const idx = Math.round(Math.max(0, Math.min(1, t)) * (DOT_SIZES.length - 1));
+  return DOT_SIZES[idx];
+};
+
+type Projected = { sx: number; sy: number; size: number; z: number };
+
+const project = (v: Vec3): Projected => ({
+  sx: SVG_PAD + ((v.x - GRID.min) / (GRID.max - GRID.min)) * SVG_SPAN,
+  sy: SVG_PAD + ((v.y - GRID.min) / (GRID.max - GRID.min)) * SVG_SPAN,
+  size: snapSize(v.z),
+  z: v.z,
+});
+
+// ─── GEOMETRY ────────────────────────────────────────────────────────────────
+
+const SPHERE_BASE: Vec3[] = (() => {
+  const phi = Math.PI * (3 - Math.sqrt(5));
+  return Array.from({ length: DOT_COUNT }, (_, i) => {
+    const y = 1 - (i / (DOT_COUNT - 1)) * 2;
+    const r = Math.sqrt(1 - y * y);
+    const theta = phi * i;
+    return { x: Math.cos(theta) * r, y, z: Math.sin(theta) * r };
+  });
 })();
 
-const rotateY = (pt: Point3D, angle: number): Point3D => {
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  return {
-    x: pt.x * cos + pt.z * sin,
-    y: pt.y,
-    z: -pt.x * sin + pt.z * cos,
-  };
+// ─── STATE SYSTEM ────────────────────────────────────────────────────────────
+
+export type StateKey = "dormant" | "thinking" | "loading";
+
+type Opacities = number[] | ((angle?: number) => number[]);
+
+type StateDef = {
+  label: string;
+  layout: (angle?: number) => Vec3[];
+  opacities: Opacities;
+  animated: boolean;
+  /** Radians per second — passed to `layout()` (3D spin). */
+  layoutSpeed?: number;
+  /** Radians per second — phase for functional opacities (e.g. `thinkingOpacities`). Defaults to `layoutSpeed` when omitted. */
+  opacitySpeed?: number;
 };
 
-const projectDot = (pt3d: Point3D): Dot => {
-  const spread = 28;
-  const cx = 50;
-  const cy = 50;
-  const t = (pt3d.z + 1) / 2; // 0 = back, 1 = front
-  return {
-    x: cx + pt3d.x * spread,
-    y: cy + pt3d.y * spread,
-    z: pt3d.z,
-    size: MIN_DOT_SIZE + t * (MAX_DOT_SIZE - MIN_DOT_SIZE),
-  };
-};
+const resolveOpacities = (o: Opacities, angle = 0): number[] =>
+  typeof o === "function" ? o(angle) : o;
 
-/*
- * ─── STATE DEFINITIONS ───
- *
- * Each state has:
- *   label     — display name
- *   layout(angle?) — returns [{ x, y, size, z? }] for all 16 dots
- *   animated  — if true, the component runs a rAF loop and passes
- *               a continuously incrementing angle to layout()
- *   speed     — radians/sec (only meaningful when animated: true)
- */
+// Inner 2×2 block of the 4×4 grid (indices 5,6,9,10).
+const INNER = new Set([5, 6, 9, 10]);
 
-const dormantLayout = (): Dot[] => {
-  const cols = 4;
-  const spacing = 16;
-  const offset = 20;
-  return Array.from({ length: DOT_COUNT }, (_, i) => ({
-    x: offset + (i % cols) * spacing,
-    y: offset + Math.floor(i / cols) * spacing,
-    size: 6,
+const dormantLayout = (): Vec3[] =>
+  Array.from({ length: DOT_COUNT }, (_, i) => ({
+    x: i % 4,
+    y: Math.floor(i / 4),
+    z: INNER.has(i) ? 0.5 : -0.5,
   }));
-};
 
-const thinkingLayout = (angle = 0): Dot[] => {
-  return SPHERE_POINTS.map((pt) => {
-    const rotated = rotateY(pt, angle);
-    return projectDot(rotated);
+const thinkingLayout = (angle = 0): Vec3[] =>
+  SPHERE_BASE.map((pt) => {
+    const r = rotateY(pt, angle);
+    return {
+      x: GRID.center + r.x * Z_EXTENT,
+      y: GRID.center + r.y * Z_EXTENT,
+      z: r.z * Z_EXTENT,
+    };
   });
+
+// ─── Loading state ────────────────────────────────────────────────────────────
+// Fill order: column by column (x=0→3), bottom-to-top within each column (y=3→0).
+// Grid is row-major: index i → x = i%4, y = floor(i/4), so y=3 is visual bottom.
+const LOADING_FILL_ORDER = [
+  12, 8, 4, 0, 13, 9, 5, 1, 14, 10, 6, 2, 15, 11, 7, 3,
+];
+
+// Inverse map: dot index → its rank in the fill sequence.
+const LOADING_DOT_RANK: number[] = new Array(DOT_COUNT);
+LOADING_FILL_ORDER.forEach((dotIdx, rank) => {
+  LOADING_DOT_RANK[dotIdx] = rank;
+});
+
+const LOADING_PAUSE = 0; // extra units after last dot fills
+const LOADING_CYCLE = DOT_COUNT + LOADING_PAUSE; // 20 units per loop
+const LOADING_TRAIL_STEPS = 12; // ranks until trail reaches min
+const LOADING_FILLED_OPACITY_MIN = 0.32;
+
+// Each dot independently tracks how long ago it was most recently filled,
+// so loop transitions are seamless — no global phase reset.
+const loadingTimeSinceFill = (angle: number, rank: number): number => {
+  if (angle < rank) return Infinity; // not yet reached on first pass
+  return (angle - rank) % LOADING_CYCLE;
 };
 
-type DormantState = {
-  label: string;
-  layout: () => Dot[];
-  animated: false;
-};
-type AnimatedState = {
-  label: string;
-  layout: (angle?: number) => Dot[];
-  animated: true;
-  speed: number;
-};
-type StateDef = DormantState | AnimatedState;
+const loadingLayout = (angle = 0): Vec3[] =>
+  Array.from({ length: DOT_COUNT }, (_, i) => {
+    const age = loadingTimeSinceFill(angle, LOADING_DOT_RANK[i]);
+    const trailT = Math.min(age / LOADING_TRAIL_STEPS, 1);
+    return {
+      x: i % 4,
+      y: Math.floor(i / 4),
+      z: age < DOT_COUNT ? lerp(Z_EXTENT, -0.5, trailT) : -0.5,
+    };
+  });
 
-type StateKey = "dormant" | "thinking";
+const loadingOpacities = (angle = 0): number[] =>
+  Array.from({ length: DOT_COUNT }, (_, i) => {
+    const age = loadingTimeSinceFill(angle, LOADING_DOT_RANK[i]);
+    if (age >= DOT_COUNT) return 0.12;
+    const trailT = Math.min(age / LOADING_TRAIL_STEPS, 1);
+    return lerp(1, LOADING_FILLED_OPACITY_MIN, trailT);
+  });
 
 const STATES: Record<StateKey, StateDef> = {
   dormant: {
     label: "Dormant",
     layout: dormantLayout,
+    opacities: DEFAULT_OPACITIES,
     animated: false,
   },
   thinking: {
     label: "Thinking",
     layout: thinkingLayout,
+    opacities: thinkingOpacities,
     animated: true,
-    speed: 0.6,
+    layoutSpeed: 3,
+    opacitySpeed: 4,
   },
-  // Future:
-  // listening: { label: "Listening", layout: listeningLayout, animated: false },
-  // error:     { label: "Error",     layout: errorLayout,     animated: true, speed: 2 },
+  loading: {
+    label: "Loading",
+    layout: loadingLayout,
+    opacities: loadingOpacities,
+    animated: true,
+    layoutSpeed: 6,
+  },
 };
 
-const STATE_KEYS = Object.keys(STATES) as StateKey[];
+export const STATE_KEYS = Object.keys(STATES) as StateKey[];
 
-/*
- * ─── SPRING CONFIG (for state-transition morphs) ───
- */
-const dotSpring = {
+export const getStateLabel = (key: StateKey): string => STATES[key].label;
+
+// ─── SPRING CONFIG ───────────────────────────────────────────────────────────
+
+const SPRING = {
   type: "spring" as const,
-  stiffness: 120,
+  stiffness: 100,
   damping: 18,
   mass: 0.8,
 };
-const staggerDelay = 0.025;
+const STAGGER = 0.035;
 
-type DotMotion = {
+/** Seconds — eases discrete Z→radius steps while the sphere spins (imperative MV updates skip CSS/Motion transitions). */
+const RADIUS_SMOOTH_TAU_S = 0.2;
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+type DotMV = {
   cx: MotionValue<number>;
   cy: MotionValue<number>;
   r: MotionValue<number>;
+  opacity: MotionValue<number>;
 };
 
-const identityOrder = () =>
-  Array.from({ length: DOT_COUNT }, (_, i) => i);
+type Snapshot = { sx: number; sy: number; r: number; opacity: number };
 
-const sortIndicesByZ = (layout: Dot[]): number[] =>
-  identityOrder().sort((a, b) => (layout[a].z ?? 0) - (layout[b].z ?? 0));
+const identity = () => Array.from({ length: DOT_COUNT }, (_, i) => i);
 
-const sameOrder = (a: number[], b: number[]) => {
-  if (a.length !== b.length) return false;
+const sortByZ = (proj: Projected[]): number[] =>
+  identity().sort((a, b) => proj[a].z - proj[b].z);
+
+const orderEq = (a: number[], b: number[]) => {
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
 };
 
-/*
- * ─── COMPONENT ───
- */
-export default function DotIcon({
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+// Semi-implicit Euler step for a spring toward target = 1.
+// Runs inside the rAF tick so it shares the exact same dt.
+const stepBlend = (
+  val: number,
+  vel: number,
+  dt: number,
+): { val: number; vel: number } => {
+  const force = -SPRING.stiffness * (val - 1) - SPRING.damping * vel;
+  const nv = vel + (force / SPRING.mass) * dt;
+  const np = val + nv * dt;
+  if (Math.abs(np - 1) < 0.001 && Math.abs(nv) < 0.01)
+    return { val: 1, vel: 0 };
+  return { val: np, vel: nv };
+};
+
+// ─── COMPONENT ───────────────────────────────────────────────────────────────
+
+const DotIcon = ({
   size = 200,
-  initialState = "dormant",
+  state = "dormant",
   color,
   style,
 }: {
   size?: number;
-  initialState?: StateKey;
+  state?: StateKey;
   color?: string;
   style?: CSSProperties;
-}) {
-  const [activeState, setActiveState] = useState<StateKey>(initialState);
-  const stateDef = (STATES[activeState] ?? STATES.dormant) as StateDef;
+}) => {
+  const [spinning, setSpinning] = useState(false);
+  const [paintOrder, setPaintOrder] = useState<number[]>(identity);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
-  /** True only while the rAF globe loop is running (not during morph into thinking). */
-  const [isSpinning, setIsSpinning] = useState(false);
-  /** Z-order for SVG paint order while spinning; identity order otherwise. */
-  const [spinOrder, setSpinOrder] = useState<number[]>(identityOrder);
-
-  const activeStateRef = useRef(activeState);
-  activeStateRef.current = activeState;
-
-  const dotMotionsRef = useRef<DotMotion[] | null>(null);
-  const ensureDotMotions = (): DotMotion[] => {
-    if (!dotMotionsRef.current) {
-      const initialDots = STATES[initialState].animated
-        ? thinkingLayout(0)
-        : dormantLayout();
-      dotMotionsRef.current = initialDots.map((d) => ({
-        cx: motionValue(d.x),
-        cy: motionValue(d.y),
-        r: motionValue(d.size / 2),
-      }));
-    }
-    return dotMotionsRef.current;
-  };
-  const dotMotions = ensureDotMotions();
+  const mvsRef = useRef<DotMV[] | null>(null);
+  if (!mvsRef.current) {
+    const def = STATES[state];
+    const proj = def.layout(0).map(project);
+    const opa = resolveOpacities(def.opacities, 0);
+    mvsRef.current = proj.map((p, i) => ({
+      cx: motionValue(p.sx),
+      cy: motionValue(p.sy),
+      r: motionValue(p.size / 2),
+      opacity: motionValue(opa[i]),
+    }));
+  }
+  const mvs = mvsRef.current;
 
   const rafRef = useRef<number | null>(null);
-  const angleRef = useRef(0);
-  const prevTimeRef = useRef<number | null>(null);
-  const animatedLayoutRef = useRef<((angle?: number) => Dot[]) | null>(null);
-  const animatedSpeedRef = useRef<number>(0.6);
-  const runningAnimControlsRef = useRef<Array<{ stop: () => void }>>([]);
+  const layoutAngleRef = useRef(0);
+  const opacityAngleRef = useRef(0);
+  const tRef = useRef<number | null>(null);
+  const ctrlsRef = useRef<{ stop: () => void }[]>([]);
 
-  const stopAllMorphAnimations = useCallback(() => {
-    runningAnimControlsRef.current.forEach((c) => c.stop());
-    runningAnimControlsRef.current = [];
+  const stopAnims = useCallback(() => {
+    ctrlsRef.current.forEach((c) => c.stop());
+    ctrlsRef.current = [];
   }, []);
 
-  const trackAnim = useCallback((control: { stop: () => void }) => {
-    runningAnimControlsRef.current.push(control);
-  }, []);
-
-  const morphToLayout = useCallback(
-    (
-      targets: Dot[],
-      onLastDotComplete?: () => void,
-    ) => {
-      stopAllMorphAnimations();
-      dotMotions.forEach((d, i) => {
-        const base = {
-          ...dotSpring,
-          delay: i * staggerDelay,
-        };
-        const onLast =
-          i === DOT_COUNT - 1 && onLastDotComplete
-            ? { ...base, onComplete: onLastDotComplete }
-            : base;
-        trackAnim(animate(d.cx, targets[i].x, base));
-        trackAnim(animate(d.cy, targets[i].y, base));
-        trackAnim(animate(d.r, targets[i].size / 2, onLast));
+  const morphTo = useCallback(
+    (targets: Projected[], opacities: number[]) => {
+      stopAnims();
+      mvs.forEach((mv, i) => {
+        const cfg = { ...SPRING, delay: i * STAGGER };
+        ctrlsRef.current.push(animate(mv.cx, targets[i].sx, cfg));
+        ctrlsRef.current.push(animate(mv.cy, targets[i].sy, cfg));
+        ctrlsRef.current.push(animate(mv.r, targets[i].size / 2, cfg));
+        ctrlsRef.current.push(animate(mv.opacity, opacities[i], cfg));
       });
     },
-    [dotMotions, stopAllMorphAnimations, trackAnim],
+    [mvs, stopAnims],
   );
-
-  const startLoop = useCallback(() => {
-    if (rafRef.current) return;
-    prevTimeRef.current = null;
-    const loop = () => {
-      if (
-        activeStateRef.current !== "thinking" ||
-        !animatedLayoutRef.current
-      ) {
-        rafRef.current = null;
-        prevTimeRef.current = null;
-        return;
-      }
-      const now = performance.now();
-      if (prevTimeRef.current !== null) {
-        const dt = (now - prevTimeRef.current) / 1000;
-        angleRef.current += animatedSpeedRef.current * dt;
-        const layout = animatedLayoutRef.current(angleRef.current);
-        layout.forEach((pt, i) => {
-          dotMotions[i].cx.set(pt.x);
-          dotMotions[i].cy.set(pt.y);
-          dotMotions[i].r.set(pt.size / 2);
-        });
-        const nextOrder = sortIndicesByZ(layout);
-        setSpinOrder((prev) =>
-          sameOrder(prev, nextOrder) ? prev : nextOrder,
-        );
-      }
-      prevTimeRef.current = now;
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
-  }, [dotMotions]);
 
   const stopLoop = useCallback(() => {
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
-      prevTimeRef.current = null;
+      tRef.current = null;
     }
   }, []);
 
+  const startLoop = useCallback(
+    (key: StateKey, def: StateDef, sources?: Snapshot[]) => {
+      if (rafRef.current) return;
+      tRef.current = null;
+
+      // Per-dot blend springs, computed in-loop so they share the same dt.
+      const blends = sources
+        ? Array.from({ length: DOT_COUNT }, () => ({ val: 0, vel: 0 }))
+        : null;
+      let elapsed = 0;
+
+      const tick = () => {
+        if (stateRef.current !== key) {
+          rafRef.current = null;
+          return;
+        }
+        const now = performance.now();
+        if (tRef.current !== null) {
+          const dt = (now - tRef.current) / 1000;
+          elapsed += dt;
+          const layoutSpeed = def.layoutSpeed ?? 0.6;
+          const opacitySpeed = def.opacitySpeed ?? layoutSpeed;
+          layoutAngleRef.current += layoutSpeed * dt;
+          opacityAngleRef.current += opacitySpeed * dt;
+
+          if (blends) {
+            for (let i = 0; i < DOT_COUNT; i++) {
+              const b = blends[i];
+              if (b.val < 1 && elapsed >= i * STAGGER) {
+                const next = stepBlend(b.val, b.vel, dt);
+                b.val = next.val;
+                b.vel = next.vel;
+              }
+            }
+          }
+
+          const proj = def.layout(layoutAngleRef.current).map(project);
+          const opa = resolveOpacities(def.opacities, opacityAngleRef.current);
+
+          proj.forEach((p, i) => {
+            const tx = p.sx;
+            const ty = p.sy;
+            const tr = p.size / 2;
+            const to = opa[i];
+
+            const rAlpha = 1 - Math.exp(-dt / RADIUS_SMOOTH_TAU_S);
+            if (sources && blends) {
+              const b = blends[i].val;
+              const s = sources[i];
+              mvs[i].cx.set(lerp(s.sx, tx, b));
+              mvs[i].cy.set(lerp(s.sy, ty, b));
+              const desiredR = lerp(s.r, tr, b);
+              mvs[i].r.set(lerp(mvs[i].r.get(), desiredR, rAlpha));
+              mvs[i].opacity.set(lerp(s.opacity, to, b));
+            } else {
+              mvs[i].cx.set(tx);
+              mvs[i].cy.set(ty);
+              mvs[i].r.set(lerp(mvs[i].r.get(), tr, rAlpha));
+              mvs[i].opacity.set(to);
+            }
+          });
+
+          const order = sortByZ(proj);
+          setPaintOrder((prev) => (orderEq(prev, order) ? prev : order));
+        }
+        tRef.current = now;
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    },
+    [mvs],
+  );
+
+  // ─── State transitions ────────────────────────────────────────────────────
+
   useEffect(() => {
-    const def = STATES[activeState] ?? STATES.dormant;
+    const def = STATES[state];
+
+    stopLoop();
+    stopAnims();
+    layoutAngleRef.current = 0;
+    opacityAngleRef.current = 0;
 
     if (def.animated) {
-      animatedLayoutRef.current = def.layout;
-      animatedSpeedRef.current = def.speed;
+      const src: Snapshot[] = mvs.map((mv) => ({
+        sx: mv.cx.get(),
+        sy: mv.cy.get(),
+        r: mv.r.get(),
+        opacity: mv.opacity.get(),
+      }));
 
-      setIsSpinning(false);
-      setSpinOrder(identityOrder());
-      stopLoop();
-
-      angleRef.current = 0;
-      const targets = def.layout(0);
-
-      morphToLayout(targets, () => {
-        if (activeStateRef.current !== "thinking") return;
-        setSpinOrder(sortIndicesByZ(targets));
-        setIsSpinning(true);
-        startLoop();
-      });
-
-      return () => {
-        stopAllMorphAnimations();
-        stopLoop();
-      };
+      setSpinning(true);
+      setPaintOrder(identity());
+      startLoop(state, def, src);
+    } else {
+      setSpinning(false);
+      setPaintOrder(identity());
+      const proj = def.layout(0).map(project);
+      const opa = resolveOpacities(def.opacities, 0);
+      morphTo(proj, opa);
     }
 
-    animatedLayoutRef.current = null;
-    setIsSpinning(false);
-    setSpinOrder(identityOrder());
-    stopLoop();
-
-    const targets = def.layout();
-    morphToLayout(targets);
-
     return () => {
-      stopAllMorphAnimations();
+      stopAnims();
       stopLoop();
     };
-  }, [
-    activeState,
-    morphToLayout,
-    startLoop,
-    stopLoop,
-    stopAllMorphAnimations,
-  ]);
+  }, [state, morphTo, startLoop, stopLoop, stopAnims, mvs]);
 
   useEffect(() => () => stopLoop(), [stopLoop]);
 
-  const viewSize = 100;
+  // ─── Render ────────────────────────────────────────────────────────────────
 
-  const displayOrder = isSpinning ? spinOrder : identityOrder();
+  const order = spinning ? paintOrder : identity();
 
   return (
     <div
       style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 32,
-        fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', monospace",
+        display: "inline-block",
+        lineHeight: 0,
         color: color ?? "currentColor",
         ...style,
       }}
     >
       <svg
-        viewBox={`0 0 ${viewSize} ${viewSize}`}
+        viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`}
         width={size}
         height={size}
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: "visible" }}
       >
-        {displayOrder.map((i) => (
+        {order.map((i) => (
           <motion.circle
             key={i}
-            cx={dotMotions[i].cx}
-            cy={dotMotions[i].cy}
-            r={dotMotions[i].r}
+            cx={mvs[i].cx}
+            cy={mvs[i].cy}
+            r={mvs[i].r}
             fill="currentColor"
-            fillOpacity={DOT_OPACITIES[i]}
+            fillOpacity={mvs[i].opacity}
           />
         ))}
       </svg>
-
-      {/* State label */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeState}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.2 }}
-          style={{
-            fontSize: 11,
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            opacity: 0.45,
-            userSelect: "none",
-          }}
-        >
-          {stateDef.label}
-        </motion.div>
-      </AnimatePresence>
-
-      {/* State switcher */}
-      <div style={{ display: "flex", gap: 8 }}>
-        {STATE_KEYS.map((key) => {
-          const active = activeState === key;
-          return (
-            <button
-              key={key}
-              onClick={() => setActiveState(key)}
-              style={{
-                padding: "6px 14px",
-                fontSize: 11,
-                fontFamily: "inherit",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                border: "1px solid",
-                borderColor: active ? "currentColor" : "rgba(128,128,128,0.3)",
-                background: active ? "currentColor" : "transparent",
-                borderRadius: 4,
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                color: "inherit",
-              }}
-            >
-              <span
-                style={{
-                  mixBlendMode: active ? "difference" : "normal",
-                  color: active ? "#fff" : "inherit",
-                  opacity: active ? 1 : 0.5,
-                }}
-              >
-                {STATES[key].label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
-}
+};
+
+export default DotIcon;
+DotIcon.displayName = "DotIcon";
