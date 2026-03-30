@@ -1,12 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { CSSProperties } from "react";
-import {
-  motion,
-  AnimatePresence,
-  animate,
-  motionValue,
-  type MotionValue,
-} from "motion/react";
+import { motion, animate, motionValue, type MotionValue } from "motion/react";
 
 // ─── 3D ENGINE ───────────────────────────────────────────────────────────────
 
@@ -75,7 +69,7 @@ const SPHERE_BASE: Vec3[] = (() => {
 
 // ─── STATE SYSTEM ────────────────────────────────────────────────────────────
 
-type StateKey = "dormant" | "thinking";
+export type StateKey = "dormant" | "thinking";
 
 type Opacities = number[] | ((angle?: number) => number[]);
 
@@ -126,7 +120,9 @@ const STATES: Record<StateKey, StateDef> = {
   },
 };
 
-const STATE_KEYS = Object.keys(STATES) as StateKey[];
+export const STATE_KEYS = Object.keys(STATES) as StateKey[];
+
+export const getStateLabel = (key: StateKey): string => STATES[key].label;
 
 // ─── SPRING CONFIG ───────────────────────────────────────────────────────────
 
@@ -161,24 +157,23 @@ const orderEq = (a: number[], b: number[]) => {
 
 const DotIcon3D = ({
   size = 200,
-  initialState = "dormant" as StateKey,
+  state = "dormant",
   color,
   style,
 }: {
   size?: number;
-  initialState?: StateKey;
+  state?: StateKey;
   color?: string;
   style?: CSSProperties;
 }) => {
-  const [activeState, setActiveState] = useState<StateKey>(initialState);
   const [spinning, setSpinning] = useState(false);
   const [paintOrder, setPaintOrder] = useState<number[]>(identity);
-  const stateRef = useRef(activeState);
-  stateRef.current = activeState;
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const mvsRef = useRef<DotMV[] | null>(null);
   if (!mvsRef.current) {
-    const def = STATES[initialState];
+    const def = STATES[state];
     const proj = def.layout(0).map(project);
     const opa = resolveOpacities(def.opacities, 0);
     mvsRef.current = proj.map((p, i) => ({
@@ -262,7 +257,7 @@ const DotIcon3D = ({
   // ─── State transitions ────────────────────────────────────────────────────
 
   useEffect(() => {
-    const def = STATES[activeState];
+    const def = STATES[state];
 
     stopLoop();
     setSpinning(false);
@@ -274,10 +269,10 @@ const DotIcon3D = ({
 
     if (def.animated) {
       morphTo(proj, opa, () => {
-        if (stateRef.current !== activeState) return;
+        if (stateRef.current !== state) return;
         setPaintOrder(sortByZ(proj));
         setSpinning(true);
-        startLoop(activeState, def);
+        startLoop(state, def);
       });
     } else {
       morphTo(proj, opa);
@@ -287,7 +282,7 @@ const DotIcon3D = ({
       stopMorphs();
       stopLoop();
     };
-  }, [activeState, morphTo, startLoop, stopLoop, stopMorphs]);
+  }, [state, morphTo, startLoop, stopLoop, stopMorphs]);
 
   useEffect(() => () => stopLoop(), [stopLoop]);
 
@@ -298,11 +293,8 @@ const DotIcon3D = ({
   return (
     <div
       style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 32,
-        fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', monospace",
+        display: "inline-block",
+        lineHeight: 0,
         color: color ?? "currentColor",
         ...style,
       }}
@@ -325,61 +317,6 @@ const DotIcon3D = ({
           />
         ))}
       </svg>
-
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeState}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.2 }}
-          style={{
-            fontSize: 11,
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            opacity: 0.45,
-            userSelect: "none",
-          }}
-        >
-          {STATES[activeState].label}
-        </motion.div>
-      </AnimatePresence>
-
-      <div style={{ display: "flex", gap: 8 }}>
-        {STATE_KEYS.map((key) => {
-          const active = activeState === key;
-          return (
-            <button
-              key={key}
-              onClick={() => setActiveState(key)}
-              style={{
-                padding: "6px 14px",
-                fontSize: 11,
-                fontFamily: "inherit",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                border: "1px solid",
-                borderColor: active ? "currentColor" : "rgba(128,128,128,0.3)",
-                background: active ? "currentColor" : "transparent",
-                borderRadius: 4,
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                color: "inherit",
-              }}
-            >
-              <span
-                style={{
-                  mixBlendMode: active ? "difference" : "normal",
-                  color: active ? "#fff" : "inherit",
-                  opacity: active ? 1 : 0.5,
-                }}
-              >
-                {STATES[key].label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 };
