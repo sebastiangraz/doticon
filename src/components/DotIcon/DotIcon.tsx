@@ -14,7 +14,12 @@ import { motion, AnimatePresence } from "motion/react";
  *   Row 3: full,  light, full, light
  */
 const DOT_OPACITIES = [
-  0.3, 1, 0.3, 1, 1, 1, 1, 1, 1, 1, 0.3, 0.3, 1, 0.3, 1, 0.3,
+  // Dormant reference image has 3 levels (row-major 4×4):
+  // veryLight, full, mid, full
+  // full,      mid,  full, mid
+  // mid,       full, mid,  full
+  // full,      mid,  full, veryLight
+  0.12, 1, 0.45, 1, 1, 0.45, 1, 0.45, 0.45, 1, 0.45, 1, 1, 0.45, 1, 0.12,
 ];
 
 const DOT_COUNT = 16;
@@ -86,7 +91,7 @@ const dormantLayout = (): Dot[] => {
   return Array.from({ length: DOT_COUNT }, (_, i) => ({
     x: offset + (i % cols) * spacing,
     y: offset + Math.floor(i / cols) * spacing,
-    size: 5.5,
+    size: 6,
   }));
 };
 
@@ -97,7 +102,22 @@ const thinkingLayout = (angle = 0): Dot[] => {
   });
 };
 
-const STATES = {
+type DormantState = {
+  label: string;
+  layout: () => Dot[];
+  animated: false;
+};
+type AnimatedState = {
+  label: string;
+  layout: (angle?: number) => Dot[];
+  animated: true;
+  speed: number;
+};
+type StateDef = DormantState | AnimatedState;
+
+type StateKey = "dormant" | "thinking";
+
+const STATES: Record<StateKey, StateDef> = {
   dormant: {
     label: "Dormant",
     layout: dormantLayout,
@@ -114,20 +134,7 @@ const STATES = {
   // error:     { label: "Error",     layout: errorLayout,     animated: true, speed: 2 },
 };
 
-type StateKey = keyof typeof STATES;
 const STATE_KEYS = Object.keys(STATES) as StateKey[];
-type DormantState = {
-  label: string;
-  layout: () => Dot[];
-  animated: false;
-};
-type AnimatedState = {
-  label: string;
-  layout: (angle?: number) => Dot[];
-  animated: true;
-  speed: number;
-};
-type StateDef = DormantState | AnimatedState;
 
 /*
  * ─── SPRING CONFIG (for state-transition morphs) ───
@@ -159,24 +166,28 @@ export default function DotIcon({
 
   // Transition phase: "morphing" (spring into sphere shape) → "spinning" (rAF loop)
   const [phase, setPhase] = useState(stateDef.animated ? "spinning" : "static");
-  const [dots, setDots] = useState<Dot[]>(() => stateDef.layout(0));
+  const [dots, setDots] = useState<Dot[]>(() =>
+    stateDef.animated ? stateDef.layout(0) : stateDef.layout(),
+  );
 
   const rafRef = useRef<number | null>(null);
   const angleRef = useRef(0);
   const prevTimeRef = useRef<number | null>(null);
+  const animatedLayoutRef = useRef<((angle?: number) => Dot[]) | null>(null);
+  const animatedSpeedRef = useRef<number>(0.6);
 
   // rAF tick for animated states
   const tick = useCallback(() => {
     const now = performance.now();
     if (prevTimeRef.current !== null) {
       const dt = (now - prevTimeRef.current) / 1000;
-      angleRef.current +=
-        (stateDef.animated ? stateDef.speed : 0.6) * dt;
-      setDots(thinkingLayout(angleRef.current));
+      angleRef.current += animatedSpeedRef.current * dt;
+      const layout = animatedLayoutRef.current;
+      if (layout) setDots(layout(angleRef.current));
     }
     prevTimeRef.current = now;
     rafRef.current = requestAnimationFrame(tick);
-  }, [stateDef]);
+  }, []);
 
   const startLoop = useCallback(() => {
     if (rafRef.current) return;
@@ -196,6 +207,9 @@ export default function DotIcon({
     const def = STATES[activeState] ?? STATES.dormant;
 
     if (def.animated) {
+      animatedLayoutRef.current = def.layout;
+      animatedSpeedRef.current = def.speed;
+
       // Step 1: set target positions (sphere at angle 0) for the spring morph
       setDots(def.layout(angleRef.current));
       setPhase("morphing");
@@ -212,8 +226,9 @@ export default function DotIcon({
       };
     } else {
       // Static state
+      animatedLayoutRef.current = null;
       stopLoop();
-      setDots(def.layout(0));
+      setDots(def.layout());
       setPhase("static");
     }
   }, [activeState, startLoop, stopLoop]);
@@ -249,36 +264,27 @@ export default function DotIcon({
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: "visible" }}
       >
-        {phase === "spinning"
-          ? // rAF-driven: direct SVG, no spring overhead
-            sortedDots.map(({ x, y, size: s, i }) => (
-              <circle
-                key={i}
-                cx={x}
-                cy={y}
-                r={s / 2}
-                fill="currentColor"
-                fillOpacity={DOT_OPACITIES[i]}
-              />
-            ))
-          : // Static or morphing: Motion springs handle the transition
-            sortedDots.map(({ x, y, size: s, i }) => (
-              <motion.circle
-                key={i}
-                fill="currentColor"
-                fillOpacity={DOT_OPACITIES[i]}
-                initial={false}
-                animate={{
-                  cx: x,
-                  cy: y,
-                  r: s / 2,
-                }}
-                transition={{
-                  ...dotSpring,
-                  delay: i * staggerDelay,
-                }}
-              />
-            ))}
+        {sortedDots.map(({ x, y, size: s, i }) => (
+          <motion.circle
+            key={i}
+            fill="currentColor"
+            fillOpacity={DOT_OPACITIES[i]}
+            initial={false}
+            animate={{
+              cx: x,
+              cy: y,
+              r: s / 2,
+            }}
+            transition={
+              phase === "spinning"
+                ? { duration: 0 }
+                : {
+                    ...dotSpring,
+                    delay: i * staggerDelay,
+                  }
+            }
+          />
+        ))}
       </svg>
 
       {/* State label */}
