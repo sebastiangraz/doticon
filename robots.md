@@ -40,9 +40,11 @@ Stagger in this model is achieved by varying spring response per dot (later dots
 
 ## Props:
 
-`size` (px, default in component), `state` (`StateKey`, default `"dormant"`), `color`, `style`.
+`size` (px, default in component), `state` (`StateKey`, default `"dormant"`), `grid` (optional integer N for an N×N dot lattice, default `4`), `color`, `style`.
 
 State is controlled externally via the `state` prop. `StateKey`, `STATE_KEYS`, and `getStateLabel` are exported for parent components.
+
+On the index route demo, grid size is adjustable with a range slider (2–13) beside the state toggle buttons.
 
 ## Dependencies:
 

@@ -10,9 +10,13 @@ import styles from "../index.module.css";
 
 const mono = "'SF Mono', 'Fira Code', 'JetBrains Mono', monospace" as const;
 
+const GRID_SLIDER_MIN = 2;
+const GRID_SLIDER_MAX = 13;
+
 export const Route = createFileRoute("/")({
   component: () => {
     const [icon3dState, setIcon3dState] = useState<StateKey>("dormant");
+    const [gridSize, setGridSize] = useState(GRID_SLIDER_MIN);
 
     return (
       <>
@@ -41,44 +45,85 @@ export const Route = createFileRoute("/")({
               fill="black"
             />
           </svg>
-          <DotIcon size={100} state={icon3dState} />
-          <div style={{ display: "flex", gap: 8 }}>
-            {STATE_KEYS.map((key: StateKey) => {
-              const active = icon3dState === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setIcon3dState(key)}
-                  style={{
-                    padding: "6px 14px",
-                    fontSize: 11,
-                    fontFamily: "inherit",
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    border: "1px solid",
-                    borderColor: active
-                      ? "currentColor"
-                      : "rgba(128,128,128,0.3)",
-                    background: active ? "currentColor" : "transparent",
-                    borderRadius: 4,
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                    color: "inherit",
-                  }}
-                >
-                  <span
+          <DotIcon size={100} state={icon3dState} grid={gridSize} />
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 16,
+            }}
+          >
+            <div style={{ display: "flex", gap: 8 }}>
+              {STATE_KEYS.map((key: StateKey) => {
+                const active = icon3dState === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setIcon3dState(key)}
                     style={{
-                      mixBlendMode: active ? "difference" : "normal",
-                      color: active ? "#fff" : "inherit",
-                      opacity: active ? 1 : 0.5,
+                      padding: "6px 14px",
+                      fontSize: 11,
+                      fontFamily: "inherit",
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      border: "1px solid",
+                      borderColor: active
+                        ? "currentColor"
+                        : "rgba(128,128,128,0.3)",
+                      background: active ? "currentColor" : "transparent",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                      color: "inherit",
                     }}
                   >
-                    {getStateLabel(key)}
-                  </span>
-                </button>
-              );
-            })}
+                    <span
+                      style={{
+                        mixBlendMode: active ? "difference" : "normal",
+                        color: active ? "#fff" : "inherit",
+                        opacity: active ? 1 : 0.5,
+                      }}
+                    >
+                      {getStateLabel(key)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <label
+              htmlFor="doticon-grid-size"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                fontSize: 11,
+                fontFamily: "inherit",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                userSelect: "none",
+                opacity: 0.85,
+              }}
+            >
+              Grid
+              <input
+                id="doticon-grid-size"
+                type="range"
+                min={GRID_SLIDER_MIN}
+                max={GRID_SLIDER_MAX}
+                value={gridSize}
+                onChange={(e) =>
+                  setGridSize(Number.parseInt(e.target.value, 10))
+                }
+                style={{ width: 120, accentColor: "currentColor" }}
+              />
+              <span style={{ minWidth: "1.2em", textAlign: "right" }}>
+                {gridSize}×{gridSize}
+              </span>
+            </label>
           </div>
           <div style={{ display: "flex", gap: "0.5rlh", maxWidth: "48rlh" }}>
             <ExposeProps className={styles.prop}>
