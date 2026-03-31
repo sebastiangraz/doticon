@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import type { CSSProperties } from "react";
 import { motion, animate, motionValue, type MotionValue } from "motion/react";
 
@@ -210,16 +210,6 @@ type DotMV = {
 
 type Snapshot = { sx: number; sy: number; r: number; opacity: number };
 
-const identity = () => Array.from({ length: DOT_COUNT }, (_, i) => i);
-
-const sortByZ = (proj: Projected[]): number[] =>
-  identity().sort((a, b) => proj[a].z - proj[b].z);
-
-const orderEq = (a: number[], b: number[]) => {
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-};
-
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 // Semi-implicit Euler step for a spring toward target = 1.
@@ -250,8 +240,6 @@ const DotIcon = ({
   color?: string;
   style?: CSSProperties;
 }) => {
-  const [spinning, setSpinning] = useState(false);
-  const [paintOrder, setPaintOrder] = useState<number[]>(identity);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -364,8 +352,6 @@ const DotIcon = ({
             }
           });
 
-          const order = sortByZ(proj);
-          setPaintOrder((prev) => (orderEq(prev, order) ? prev : order));
         }
         tRef.current = now;
         rafRef.current = requestAnimationFrame(tick);
@@ -393,12 +379,8 @@ const DotIcon = ({
         opacity: mv.opacity.get(),
       }));
 
-      setSpinning(true);
-      setPaintOrder(identity());
       startLoop(state, def, src);
     } else {
-      setSpinning(false);
-      setPaintOrder(identity());
       const proj = def.layout(0).map(project);
       const opa = resolveOpacities(def.opacities, 0);
       morphTo(proj, opa);
@@ -413,8 +395,6 @@ const DotIcon = ({
   useEffect(() => () => stopLoop(), [stopLoop]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
-
-  const order = spinning ? paintOrder : identity();
 
   return (
     <div
@@ -432,14 +412,14 @@ const DotIcon = ({
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: "visible" }}
       >
-        {order.map((i) => (
+        {mvs.map((mv, i) => (
           <motion.circle
             key={i}
-            cx={mvs[i].cx}
-            cy={mvs[i].cy}
-            r={mvs[i].r}
+            cx={mv.cx}
+            cy={mv.cy}
+            r={mv.r}
             fill="currentColor"
-            fillOpacity={mvs[i].opacity}
+            fillOpacity={mv.opacity}
           />
         ))}
       </svg>
