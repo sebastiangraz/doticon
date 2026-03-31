@@ -213,11 +213,22 @@ type DotMV = {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-const DotCircle = ({ mv }: { mv: DotMV }) => {
-  const cx = useSpring(mv.cx.get(), SPRING);
-  const cy = useSpring(mv.cy.get(), SPRING);
-  const r = useSpring(mv.r.get(), SPRING);
-  const opacity = useSpring(mv.opacity.get(), SPRING);
+const DotCircle = ({ mv, i }: { mv: DotMV; i: number }) => {
+  // “Stagger” in the follow-spring model:
+  // later dots are slightly heavier/softer, so they lag behind and create a cascade
+  // without introducing explicit delays/queued transitions.
+  const t = DOT_COUNT <= 1 ? 0 : i / (DOT_COUNT - 1);
+  const spring = {
+    ...SPRING,
+    stiffness: SPRING.stiffness * (1 - 0.35 * t),
+    damping: SPRING.damping * (1 + 0.15 * t),
+    mass: SPRING.mass * (1 + 0.6 * t),
+  } as const;
+
+  const cx = useSpring(mv.cx.get(), spring);
+  const cy = useSpring(mv.cy.get(), spring);
+  const r = useSpring(mv.r.get(), spring);
+  const opacity = useSpring(mv.opacity.get(), spring);
 
   useMotionValueEvent(mv.cx, "change", (latest) => cx.set(latest));
   useMotionValueEvent(mv.cy, "change", (latest) => cy.set(latest));
@@ -331,7 +342,7 @@ const DotIcon = ({
         style={{ overflow: "visible" }}
       >
         {targetMvs.map((mv, i) => (
-          <DotCircle key={i} mv={mv} />
+          <DotCircle key={i} mv={mv} i={i} />
         ))}
       </svg>
     </div>
