@@ -2,7 +2,7 @@
 
 ## Core concept:
 
-16 dots treated as vertices in a full cartesian coordinate space (`Vec3`). The 4×4 grid uses integer X/Y positions on the plane defined by `GRID` (see source), centered on `GRID.center` at Z≈0. Dots are uniform in the backend — size is derived purely from Z-depth at render time via orthographic projection. Uses `fill="currentColor"` so color is controlled externally.
+Dot grid (defaulting to 16 dots) treated as vertices in a full cartesian coordinate space (`Vec3`). All three axes share the same integer coordinate space defined by `GRID` (see source), centered on `GRID.center`. Dots are uniform in the backend — size is derived purely from Z-depth at render time via orthographic projection. Uses `fill="currentColor"` so color is controlled externally.
 
 ## 3D engine:
 
@@ -24,7 +24,7 @@ Two states exist; more can be added by registering one `STATES` entry plus a lay
 
 **Dormant** — static 4×4 grid on Z≈0. The inner 2×2 block uses a higher Z than the outer ring (see `INNER` and `dormantLayout` in source), which drives size via `snapSize` and gives a depth hierarchy. Uses `DEFAULT_OPACITIES`.
 
-**Thinking** — Fibonacci sphere (`SPHERE_BASE`) scaled and centered using `Z_EXTENT` and `GRID.center`. While active, the layout angle advances each animation frame using that state’s `speed` (radians per second; integrated in the `requestAnimationFrame` loop). Z-depth controls both dot size and paint order. Uses `THINKING_OPACITIES`.
+**Thinking** — Fibonacci sphere (`SPHERE_BASE`) scaled and centered using `GRID.center` for all three axes. While active, the layout angle advances each animation frame using that state’s `speed` (radians per second; integrated in the `requestAnimationFrame` loop). Z-depth controls both dot size and paint order. Uses `THINKING_OPACITIES`.
 
 ## Animation architecture:
 
