@@ -83,14 +83,20 @@ export const Route = createFileRoute("/")({
           <div style={{ display: "flex", gap: "0.5rlh", maxWidth: "48rlh" }}>
             <ExposeProps className={styles.prop}>
               <DotIcon size={32} state={"dormant"} />
+              <DotIcon size={32} state={"dormant"} grid={3} />
+              <DotIcon size={32} state={"dormant"} grid={5} />
               <DotIcon size={16} state={"dormant"} />
             </ExposeProps>
             <ExposeProps className={styles.prop}>
               <DotIcon size={32} state={"thinking"} />
+              <DotIcon size={32} state={"thinking"} grid={3} />
+              <DotIcon size={32} state={"thinking"} grid={5} />
               <DotIcon size={16} state={"thinking"} />
             </ExposeProps>
             <ExposeProps className={styles.prop}>
               <DotIcon size={32} state={"loading"} />
+              <DotIcon size={32} state={"loading"} grid={3} />
+              <DotIcon size={32} state={"loading"} grid={5} />
               <DotIcon size={16} state={"loading"} />
             </ExposeProps>
           </div>
