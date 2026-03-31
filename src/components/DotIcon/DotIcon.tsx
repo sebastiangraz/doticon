@@ -56,8 +56,15 @@ const rotateY = ({ x, y, z }: Vec3, a: number): Vec3 => {
 
 const snapSize = (z: number): number => {
   const t = (z - GRID.min) / (GRID.max - GRID.min);
-  const idx = Math.round(Math.max(0, Math.min(1, t)) * (DOT_SIZES.length - 1));
-  return DOT_SIZES[idx];
+  const clamped = Math.max(0, Math.min(1, t));
+  const pos = clamped * (DOT_SIZES.length - 1);
+  const i0 = Math.floor(pos);
+  const i1 = Math.min(DOT_SIZES.length - 1, i0 + 1);
+  const f = pos - i0;
+  // Smoothstep the interpolation so size changes feel eased,
+  // while still anchored to the DOT_SIZES scale.
+  const s = f * f * (3 - 2 * f);
+  return DOT_SIZES[i0] + (DOT_SIZES[i1] - DOT_SIZES[i0]) * s;
 };
 
 type Projected = { sx: number; sy: number; size: number; z: number };
@@ -202,6 +209,15 @@ const SPRING = {
   mass: 1,
 };
 const STAGGER = 0.035;
+
+// Blend-in for animated states should “grab” the rotating target quickly
+// (similar to the old in-rAF `stepBlend` feel), without relying on overshoot.
+const BLEND_SPRING = {
+  type: "spring" as const,
+  stiffness: 100,
+  damping: 24,
+  mass: 1,
+};
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -381,7 +397,7 @@ const DotIcon = ({
 
       blends.forEach((b) => b.set(0));
       blends.forEach((b, i) => {
-        const cfg = { ...SPRING, delay: i * STAGGER };
+        const cfg = { ...BLEND_SPRING, delay: i * STAGGER };
         ctrlsRef.current.push(animate(b, 1, cfg));
       });
     } else {
@@ -389,10 +405,12 @@ const DotIcon = ({
       // Ensure the static MotionValues start from the currently-rendered pose,
       // otherwise we’d animate from stale `mvs` values after being in an animated state.
       for (let i = 0; i < DOT_COUNT; i++) {
-        mvs[i].cx.set(prevMvs[i].cx.get());
-        mvs[i].cy.set(prevMvs[i].cy.get());
-        mvs[i].r.set(prevMvs[i].r.get());
-        mvs[i].opacity.set(prevMvs[i].opacity.get());
+        // Use `jump()` to reset velocity, otherwise the spring can inherit a huge
+        // implicit velocity from this cross-state handoff and overshoot (“explode”).
+        mvs[i].cx.jump(prevMvs[i].cx.get());
+        mvs[i].cy.jump(prevMvs[i].cy.get());
+        mvs[i].r.jump(prevMvs[i].r.get());
+        mvs[i].opacity.jump(prevMvs[i].opacity.get());
       }
 
       sourcesRef.current = null;
