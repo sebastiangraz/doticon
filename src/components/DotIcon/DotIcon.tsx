@@ -357,7 +357,7 @@ const DotIcon = ({
   state = "dormant",
   color,
   style,
-  grid = 6,
+  grid = 4,
 }: {
   size?: number;
   state?: StateKey;
