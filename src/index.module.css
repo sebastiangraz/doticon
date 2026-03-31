@@ -28,5 +28,8 @@
   & > * {
     padding: 1rlh;
     flex: 1 0 auto;
+    &:not(:first-child) {
+      box-shadow: 0px 1px 0px 0 #0001 inset;
+    }
   }
 }

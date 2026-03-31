@@ -42,24 +42,6 @@ export const Route = createFileRoute("/")({
             />
           </svg>
           <DotIcon size={100} state={icon3dState} />
-          {/* <AnimatePresence mode="wait">
-            <motion.div
-              key={icon3dState}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.2 }}
-              style={{
-                fontSize: 11,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                opacity: 0.45,
-                userSelect: "none",
-              }}
-            >
-              {getStateLabel(icon3dState)}
-            </motion.div>
-          </AnimatePresence> */}
           <div style={{ display: "flex", gap: 8 }}>
             {STATE_KEYS.map((key: StateKey) => {
               const active = icon3dState === key;
@@ -101,12 +83,15 @@ export const Route = createFileRoute("/")({
           <div style={{ display: "flex", gap: "0.5rlh", maxWidth: "48rlh" }}>
             <ExposeProps className={styles.prop}>
               <DotIcon size={32} state={"dormant"} />
+              <DotIcon size={16} state={"dormant"} />
             </ExposeProps>
             <ExposeProps className={styles.prop}>
               <DotIcon size={32} state={"thinking"} />
+              <DotIcon size={16} state={"thinking"} />
             </ExposeProps>
             <ExposeProps className={styles.prop}>
               <DotIcon size={32} state={"loading"} />
+              <DotIcon size={16} state={"loading"} />
             </ExposeProps>
           </div>
         </div>

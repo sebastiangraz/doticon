@@ -12,7 +12,7 @@ const GRID = { min: 0, max: 3, center: 1.5 } as const;
 const Z_EXTENT = 1.5;
 
 const VIEW_SIZE = 100;
-const SVG_PAD = 18;
+const SVG_PAD = 14;
 const SVG_SPAN = VIEW_SIZE - 2 * SVG_PAD;
 
 const DOT_COUNT = 16;
@@ -96,7 +96,7 @@ const resolveOpacities = (o: Opacities, angle = 0): number[] =>
   typeof o === "function" ? o(angle) : o;
 
 // Inner 2×2 block of the 4×4 grid (indices 5,6,9,10).
-const INNER = new Set([5, 6, 9, 10]);
+const INNER = new Set([6, 9]);
 
 const dormantLayout = (): Vec3[] =>
   Array.from({ length: DOT_COUNT }, (_, i) => ({
@@ -130,8 +130,8 @@ LOADING_FILL_ORDER.forEach((dotIdx, rank) => {
 
 const LOADING_PAUSE = 2; // extra units after last dot fills
 const LOADING_CYCLE = DOT_COUNT + LOADING_PAUSE; // 20 units per loop
-const LOADING_TRAIL_STEPS = 12; // ranks until trail reaches min
-const LOADING_FILLED_OPACITY_MIN = 0.32;
+const LOADING_TRAIL_STEPS = DOT_COUNT - 1; // ranks until trail reaches min
+const LOADING_FILLED_OPACITY_MIN = 0.12;
 
 // Each dot independently tracks how long ago it was most recently filled,
 // so loop transitions are seamless — no global phase reset.
