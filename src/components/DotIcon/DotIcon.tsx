@@ -22,7 +22,6 @@ type GridConfig = {
   dotCount: number;
   grid: { min: 0; max: number; center: number };
   dotSizes: readonly number[];
-  defaultOpacities: number[];
 };
 
 const buildGridConfig = (n: number): GridConfig => {
@@ -30,18 +29,7 @@ const buildGridConfig = (n: number): GridConfig => {
   const grid = { min: 0 as const, max: n - 1, center: (n - 1) / 2 };
   // One size bucket per Z level, stepping up by 2px per level
   const dotSizes = Array.from({ length: n }, (_, i) => 6 + i * 2);
-  // Checkerboard opacity pattern that generalises the original 4×4 hand-tuned values:
-  //   (col+row) % 2 === 1  → 1.0
-  //   (col+row) % 2 === 0  → 0.45
-  //   top-left and bottom-right corners → 0.12
-  const defaultOpacities = Array.from({ length: dotCount }, (_, i) => {
-    const col = i % n;
-    const row = Math.floor(i / n);
-    if ((col === 0 && row === 0) || (col === n - 1 && row === n - 1))
-      return 0.12;
-    return (col + row) % 2 === 1 ? 1 : 0.45;
-  });
-  return { n, dotCount, grid, dotSizes, defaultOpacities };
+  return { n, dotCount, grid, dotSizes };
 };
 
 // ─── 3D math ─────────────────────────────────────────────────────────────────
@@ -82,18 +70,48 @@ const project = (v: Vec3, config: GridConfig): Projected => ({
 // Each builder is private to the state that needs it; none of these values
 // belong on GridConfig — they are implementation details of individual states.
 
-// Dormant: anti-diagonal of the central 2×2 for even n; center dot for odd n.
-const buildInnerSet = (config: GridConfig): Set<number> => {
-  const { n } = config;
-  if (n % 2 === 0) {
-    const half = n / 2;
-    return new Set([
-      (half - 1) * n + half, // row=half-1, col=half
-      half * n + (half - 1), // row=half,   col=half-1
-    ]);
-  }
-  const mid = Math.floor(n / 2);
-  return new Set([mid * n + mid]);
+// ─── Dormant — hand-crafted logotype pattern ──────────────────────────────────
+// The 7×7 master is the canonical design reference. All other grid sizes are
+// derived from it via nearest-neighbour sampling so the logo character is
+// preserved at any resolution. dim = 0.12, full = 1.
+//
+// Visualised (D = dim, █ = full, ▒ = half):
+//   D █ █ D █ █ █
+//   █ ▒ █ █ D █ █
+//   █ █ ▒ █ █ D █
+//   D █ █ ▒ █ █ D
+//   █ D █ █ ▒ █ █
+//   █ █ D █ █ ▒ █
+//   █ █ █ D █ █ D
+const DORMANT_MASTER_N = 7;
+const DORMANT_MASTER: readonly number[] = [
+  // row 0
+  0.12, 1, 1, 0.12, 1, 1, 1,
+  // row 1
+  1, 0.45, 1, 1, 0.12, 1, 1,
+  // row 2
+  1, 1, 0.45, 1, 1, 0.12, 1,
+  // row 3
+  0.12, 1, 1, 0.45, 1, 1, 0.12,
+  // row 4
+  1, 0.12, 1, 1, 0.45, 1, 1,
+  // row 5
+  1, 1, 0.12, 1, 1, 0.45, 1,
+  // row 6
+  1, 1, 1, 0.12, 1, 1, 0.12,
+];
+
+// Nearest-neighbour downsample from the 7×7 master to any n×n grid.
+const buildDormantOpacities = (n: number): number[] => {
+  if (n === DORMANT_MASTER_N) return [...DORMANT_MASTER];
+  const span = DORMANT_MASTER_N - 1; // 6
+  return Array.from({ length: n * n }, (_, idx) => {
+    const col = idx % n;
+    const row = Math.floor(idx / n);
+    const srcCol = n === 1 ? 0 : Math.round((col / (n - 1)) * span);
+    const srcRow = n === 1 ? 0 : Math.round((row / (n - 1)) * span);
+    return DORMANT_MASTER[srcRow * DORMANT_MASTER_N + srcCol];
+  });
 };
 
 // Thinking: Fibonacci sphere sized to dotCount.
@@ -148,11 +166,13 @@ const resolveOpacities = (o: Opacities, angle = 0): number[] =>
 
 // ─── Layout / opacity functions ───────────────────────────────────────────────
 
-const dormantLayout = (config: GridConfig, innerSet: Set<number>): Vec3[] =>
+// All dormant dots sit at a consistent near-front Z — the logo reads through
+// opacity alone, size variation would compete with the pattern.
+const dormantLayout = (config: GridConfig): Vec3[] =>
   Array.from({ length: config.dotCount }, (_, i) => ({
     x: i % config.n,
     y: Math.floor(i / config.n),
-    z: innerSet.has(i) ? config.grid.max - 1 : config.grid.max - 2,
+    z: Math.max(config.grid.min, config.grid.max - 1),
   }));
 
 const thinkingLayout = (
@@ -235,15 +255,15 @@ const loadingOpacities = (
 // computed once per GridConfig, and invisible to the GridConfig type itself.
 
 const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
-  const innerSet = buildInnerSet(config);
+  const dormantOpacities = buildDormantOpacities(config.n);
   const sphereBase = buildSphereBase(config);
   const { dotRank } = buildLoadingOrder(config);
 
   return {
     dormant: {
       label: "Dormant",
-      layout: () => dormantLayout(config, innerSet),
-      opacities: config.defaultOpacities,
+      layout: () => dormantLayout(config),
+      opacities: dormantOpacities,
       animated: false,
     },
     thinking: {
