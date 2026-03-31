@@ -6,6 +6,8 @@ import {
   motionValue,
   transformValue,
   useTime,
+  useSpring,
+  useMotionValueEvent,
   type MotionValue,
 } from "motion/react";
 
@@ -56,15 +58,8 @@ const rotateY = ({ x, y, z }: Vec3, a: number): Vec3 => {
 
 const snapSize = (z: number): number => {
   const t = (z - GRID.min) / (GRID.max - GRID.min);
-  const clamped = Math.max(0, Math.min(1, t));
-  const pos = clamped * (DOT_SIZES.length - 1);
-  const i0 = Math.floor(pos);
-  const i1 = Math.min(DOT_SIZES.length - 1, i0 + 1);
-  const f = pos - i0;
-  // Smoothstep the interpolation so size changes feel eased,
-  // while still anchored to the DOT_SIZES scale.
-  const s = f * f * (3 - 2 * f);
-  return DOT_SIZES[i0] + (DOT_SIZES[i1] - DOT_SIZES[i0]) * s;
+  const idx = Math.round(Math.max(0, Math.min(1, t)) * (DOT_SIZES.length - 1));
+  return DOT_SIZES[idx];
 };
 
 type Projected = { sx: number; sy: number; size: number; z: number };
@@ -205,8 +200,8 @@ export const getStateLabel = (key: StateKey): string => STATES[key].label;
 const SPRING = {
   type: "spring" as const,
   stiffness: 100,
-  damping: 24,
-  mass: 1,
+  damping: 18,
+  mass: 0.8,
 };
 const STAGGER = 0.035;
 
@@ -226,6 +221,33 @@ type DotMV = {
   cy: MotionValue<number>;
   r: MotionValue<number>;
   opacity: MotionValue<number>;
+};
+
+const DotCircle = ({ mv }: { mv: DotMV }) => {
+  // Keep a stable spring across state switches and have it follow whatever
+  // `mv.r` currently is. This prevents “pops” when swapping between static/derived
+  // MotionValues and avoids remounting dots.
+  const r = useSpring(mv.r.get(), { stiffness: 100, damping: 18, mass: 0.8 });
+
+  useMotionValueEvent(mv.r, "change", (latest) => {
+    r.set(latest);
+  });
+
+  // When the underlying MotionValue instance changes (state switch),
+  // nudge the spring’s target to the new source’s current value.
+  useEffect(() => {
+    r.set(mv.r.get());
+  }, [mv.r, r]);
+
+  return (
+    <motion.circle
+      cx={mv.cx}
+      cy={mv.cy}
+      r={r}
+      fill="currentColor"
+      fillOpacity={mv.opacity}
+    />
+  );
 };
 
 type Snapshot = { sx: number; sy: number; r: number; opacity: number };
@@ -446,14 +468,7 @@ const DotIcon = ({
         style={{ overflow: "visible" }}
       >
         {renderMvs.map((mv, i) => (
-          <motion.circle
-            key={i}
-            cx={mv.cx}
-            cy={mv.cy}
-            r={mv.r}
-            fill="currentColor"
-            fillOpacity={mv.opacity}
-          />
+          <DotCircle key={i} mv={mv} />
         ))}
       </svg>
     </div>
