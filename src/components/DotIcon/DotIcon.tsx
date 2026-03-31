@@ -213,22 +213,11 @@ type DotMV = {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-const DotCircle = ({ mv, i }: { mv: DotMV; i: number }) => {
-  // “Stagger” in the follow-spring model:
-  // later dots are slightly heavier/softer, so they lag behind and create a cascade
-  // without introducing explicit delays/queued transitions.
-  const t = DOT_COUNT <= 1 ? 0 : i / (DOT_COUNT - 1);
-  const spring = {
-    ...SPRING,
-    stiffness: SPRING.stiffness * (1 - 0.35 * t),
-    damping: SPRING.damping * (1 + 0.24 * t),
-    mass: SPRING.mass * (1 + 0.6 * t),
-  } as const;
-
-  const cx = useSpring(mv.cx.get(), spring);
-  const cy = useSpring(mv.cy.get(), spring);
-  const r = useSpring(mv.r.get(), spring);
-  const opacity = useSpring(mv.opacity.get(), spring);
+const DotCircle = ({ mv }: { mv: DotMV }) => {
+  const cx = useSpring(mv.cx.get(), SPRING);
+  const cy = useSpring(mv.cy.get(), SPRING);
+  const r = useSpring(mv.r.get(), SPRING);
+  const opacity = useSpring(mv.opacity.get(), SPRING);
 
   useMotionValueEvent(mv.cx, "change", (latest) => cx.set(latest));
   useMotionValueEvent(mv.cy, "change", (latest) => cy.set(latest));
@@ -258,6 +247,16 @@ const DotCircle = ({ mv, i }: { mv: DotMV; i: number }) => {
 
 const clamp = (v: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v));
+const clamp01 = (v: number) => clamp(v, 0, 1);
+const smoothstep01 = (t: number) => t * t * (3 - 2 * t);
+
+// Soft stagger: each dot's transition progress is phase-shifted in time.
+// No queued transitions—targets are still updated every frame; each dot just
+// samples a slightly different local time.
+const STAGGER_S = 0.035;
+const STAGGER_RAMP_S = 0.22;
+
+type Snapshot = { sx: number; sy: number; r: number; opacity: number };
 
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 
@@ -298,28 +297,47 @@ const DotIcon = ({
 
   // ─── State transitions ────────────────────────────────────────────────────
 
+  const sourcesRef = useRef<Snapshot[] | null>(null);
+
   useEffect(() => {
+    // Snapshot current on-screen pose to blend from.
+    sourcesRef.current = targetMvs.map((mv) => ({
+      sx: mv.cx.get(),
+      sy: mv.cy.get(),
+      r: mv.r.get(),
+      opacity: mv.opacity.get(),
+    }));
     phaseStartMsRef.current = time.get();
   }, [state, time]);
 
   useMotionValueEvent(time, "change", (ms) => {
     const key = stateRef.current;
     const def = STATES[key];
-    const t = (ms - phaseStartMsRef.current) / 1000;
-
-    const layoutAngle = def.animated ? (def.layoutSpeed ?? 0) * t : 0;
-    const opacityAngle = def.animated
-      ? (def.opacitySpeed ?? def.layoutSpeed ?? 0) * t
-      : 0;
-
-    const proj = def.layout(layoutAngle).map(project);
-    const opa = resolveOpacities(def.opacities, opacityAngle);
+    const t = Math.max(0, (ms - phaseStartMsRef.current) / 1000);
 
     for (let i = 0; i < DOT_COUNT; i++) {
-      targetMvs[i].cx.set(proj[i].sx);
-      targetMvs[i].cy.set(proj[i].sy);
-      targetMvs[i].r.set(Math.max(0, proj[i].size / 2));
-      targetMvs[i].opacity.set(clamp(opa[i], 0, 1));
+      const localT = Math.max(0, t - i * STAGGER_S);
+      const u = clamp01(localT / STAGGER_RAMP_S);
+      const p = smoothstep01(u);
+
+      const layoutAngle = def.animated ? (def.layoutSpeed ?? 0) * localT : 0;
+      const opacityAngle = def.animated
+        ? (def.opacitySpeed ?? def.layoutSpeed ?? 0) * localT
+        : 0;
+
+      const projI = project(def.layout(layoutAngle)[i]);
+      const opaI = resolveOpacities(def.opacities, opacityAngle)[i];
+
+      const src = sourcesRef.current?.[i];
+      const cx = src ? lerp(src.sx, projI.sx, p) : projI.sx;
+      const cy = src ? lerp(src.sy, projI.sy, p) : projI.sy;
+      const r = src ? lerp(src.r, projI.size / 2, p) : projI.size / 2;
+      const opacity = src ? lerp(src.opacity, opaI, p) : opaI;
+
+      targetMvs[i].cx.set(cx);
+      targetMvs[i].cy.set(cy);
+      targetMvs[i].r.set(Math.max(0, r));
+      targetMvs[i].opacity.set(clamp(opacity, 0, 1));
     }
   });
 
@@ -342,7 +360,7 @@ const DotIcon = ({
         style={{ overflow: "visible" }}
       >
         {targetMvs.map((mv, i) => (
-          <DotCircle key={i} mv={mv} i={i} />
+          <DotCircle key={i} mv={mv} />
         ))}
       </svg>
     </div>
