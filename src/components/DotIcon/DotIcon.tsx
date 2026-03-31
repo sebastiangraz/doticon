@@ -17,7 +17,7 @@ type Vec3 = { x: number; y: number; z: number };
 
 // Fixed size chart — back → front. Independent of grid size so dots look the
 // same regardless of how many columns the grid has. Editable for tuning.
-const DOT_SIZES = [6, 8, 10, 12] as const;
+const DOT_SIZES = [6, 8, 12, 16] as const;
 
 // Pure coordinate-system description. Contains no state-specific data —
 // adding or removing a state never requires changing this type.
@@ -126,13 +126,13 @@ const DORMANT_4x4_OPACITIES: readonly number[] = [
 // Z per dot in 0–3 order; edit to give individual dots more or less visual weight.
 const DORMANT_4x4_Z: readonly number[] = [
   // row 0
-  2, 2, 2, 2,
+  1, 2, 2, 2,
   // row 1
-  2, 3, 2, 2,
-  // row 2
   2, 2, 3, 2,
+  // row 2
+  2, 3, 2, 2,
   // row 3
-  2, 2, 2, 2,
+  2, 2, 2, 1,
 ];
 
 // Nearest-neighbour downsample from the 7×7 master to any n×n grid.
@@ -207,10 +207,11 @@ const resolveOpacities = (o: Opacities, angle = 0): number[] =>
 const dormantLayout = (config: GridConfig): Vec3[] => {
   const useOverride = config.n === 4;
   const defaultZ = Math.max(config.grid.min, config.grid.max - 1);
+
   return Array.from({ length: config.dotCount }, (_, i) => ({
     x: i % config.n,
     y: Math.floor(i / config.n),
-    z: useOverride ? DORMANT_4x4_Z[i] : defaultZ,
+    z: useOverride ? DORMANT_4x4_Z[i] : 0,
   }));
 };
 
