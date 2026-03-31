@@ -41,7 +41,7 @@ export const Route = createFileRoute("/")({
               fill="black"
             />
           </svg>
-          <DotIcon size={100} state={icon3dState} />
+          <DotIcon size={100} state={icon3dState} grid={6} />
           <div style={{ display: "flex", gap: 8 }}>
             {STATE_KEYS.map((key: StateKey) => {
               const active = icon3dState === key;
@@ -83,14 +83,21 @@ export const Route = createFileRoute("/")({
           <div style={{ display: "flex", gap: "0.5rlh", maxWidth: "48rlh" }}>
             <ExposeProps className={styles.prop}>
               <DotIcon size={32} state={"dormant"} />
+              <DotIcon size={32} state={"dormant"} grid={3} />
+              <DotIcon size={32} state={"dormant"} grid={5} />
+              <DotIcon size={100} state={"dormant"} grid={6} />
               <DotIcon size={16} state={"dormant"} />
             </ExposeProps>
             <ExposeProps className={styles.prop}>
               <DotIcon size={32} state={"thinking"} />
+              <DotIcon size={32} state={"thinking"} grid={3} />
+              <DotIcon size={32} state={"thinking"} grid={5} />
               <DotIcon size={16} state={"thinking"} />
             </ExposeProps>
             <ExposeProps className={styles.prop}>
               <DotIcon size={32} state={"loading"} />
+              <DotIcon size={32} state={"loading"} grid={3} />
+              <DotIcon size={32} state={"loading"} grid={5} />
               <DotIcon size={16} state={"loading"} />
             </ExposeProps>
           </div>

@@ -1,205 +1,11 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { CSSProperties } from "react";
 import { motion, animate, motionValue, type MotionValue } from "motion/react";
 
-// ─── 3D ENGINE ───────────────────────────────────────────────────────────────
+// ─── TYPES ────────────────────────────────────────────────────────────────────
 
 type Vec3 = { x: number; y: number; z: number };
-
-// Grid lives at integer coords 0–3 on all axes; center at 1.5,1.5,1.5.
-// Z snap zones: 0 → 6px, 1 → 8px, 2 → 10px, 3 → 12px
-const GRID = { min: 0, max: 3, center: 1.5 } as const;
-
-const VIEW_SIZE = 100;
-const SVG_PAD = 14;
-const SVG_SPAN = VIEW_SIZE - 2 * SVG_PAD;
-
-const DOT_COUNT = 16;
-
-// Clamped size chart — back → front. Editable for tuning.
-const DOT_SIZES = [6, 8, 10, 12] as const;
-
-// Fallback opacity pattern (row-major 4×4).
-const DEFAULT_OPACITIES = [
-  0.12, 1, 0.45, 1, 1, 0.45, 1, 0.45, 0.45, 1, 0.45, 1, 1, 0.45, 1, 0.12,
-];
-
-// Thinking: one sine wave along Fibonacci spiral index order; +0.5 = 50% path offset; `opacityAngle` is advanced by `opacitySpeed` (rad/s), independent of layout rotation.
-const THINKING_OPACITY_MIN = 0.12;
-const THINKING_OPACITY_MAX = 1;
-
-const thinkingOpacities = (opacityAngle = 0): number[] =>
-  Array.from({ length: DOT_COUNT }, (_, i) => {
-    const u = (i / DOT_COUNT + 0.5) % 1;
-    const w = 0.5 + 0.5 * Math.sin(2 * Math.PI * u + opacityAngle);
-    return (
-      THINKING_OPACITY_MIN + (THINKING_OPACITY_MAX - THINKING_OPACITY_MIN) * w
-    );
-  });
-
-// ─── 3D math ─────────────────────────────────────────────────────────────────
-
-const rotateY = ({ x, y, z }: Vec3, a: number): Vec3 => {
-  const c = Math.cos(a);
-  const s = Math.sin(a);
-  return { x: x * c + z * s, y, z: -x * s + z * c };
-};
-
-// ─── Orthographic projection (drop Z, map X/Y → SVG) ────────────────────────
-
-const snapSize = (z: number): number => {
-  const t = (z - GRID.min) / (GRID.max - GRID.min);
-  const idx = Math.round(Math.max(0, Math.min(1, t)) * (DOT_SIZES.length - 1));
-  return DOT_SIZES[idx];
-};
-
 type Projected = { sx: number; sy: number; size: number; z: number };
-
-const project = (v: Vec3): Projected => ({
-  sx: SVG_PAD + ((v.x - GRID.min) / (GRID.max - GRID.min)) * SVG_SPAN,
-  sy: SVG_PAD + ((v.y - GRID.min) / (GRID.max - GRID.min)) * SVG_SPAN,
-  size: snapSize(v.z),
-  z: v.z,
-});
-
-// ─── GEOMETRY ────────────────────────────────────────────────────────────────
-
-const SPHERE_BASE: Vec3[] = (() => {
-  const phi = Math.PI * (3 - Math.sqrt(5));
-  return Array.from({ length: DOT_COUNT }, (_, i) => {
-    const y = 1 - (i / (DOT_COUNT - 1)) * 2;
-    const r = Math.sqrt(1 - y * y);
-    const theta = phi * i;
-    return { x: Math.cos(theta) * r, y, z: Math.sin(theta) * r };
-  });
-})();
-
-// ─── STATE SYSTEM ────────────────────────────────────────────────────────────
-
-export type StateKey = "dormant" | "thinking" | "loading";
-
-type Opacities = number[] | ((angle?: number) => number[]);
-
-type StateDef = {
-  label: string;
-  layout: (angle?: number) => Vec3[];
-  opacities: Opacities;
-  animated: boolean;
-  /** Radians per second — passed to `layout()` (3D spin). */
-  layoutSpeed?: number;
-  /** Radians per second — phase for functional opacities (e.g. `thinkingOpacities`). Defaults to `layoutSpeed` when omitted. */
-  opacitySpeed?: number;
-};
-
-const resolveOpacities = (o: Opacities, angle = 0): number[] =>
-  typeof o === "function" ? o(angle) : o;
-
-// Inner 2×2 block of the 4×4 grid (indices 5,6,9,10).
-const INNER = new Set([6, 9]);
-
-const dormantLayout = (): Vec3[] =>
-  Array.from({ length: DOT_COUNT }, (_, i) => ({
-    x: i % 4,
-    y: Math.floor(i / 4),
-    z: INNER.has(i) ? GRID.max - 1 : GRID.max - 2,
-  }));
-
-const thinkingLayout = (angle = 0): Vec3[] =>
-  SPHERE_BASE.map((pt) => {
-    const r = rotateY(pt, angle);
-    return {
-      x: GRID.center + r.x * GRID.center,
-      y: GRID.center + r.y * GRID.center,
-      z: GRID.center + r.z * GRID.center,
-    };
-  });
-
-// ─── Loading state ────────────────────────────────────────────────────────────
-// Fill order: column by column (x=0→3), bottom-to-top within each column (y=3→0).
-// Grid is row-major: index i → x = i%4, y = floor(i/4), so y=3 is visual bottom.
-const LOADING_FILL_ORDER = [
-  12, 8, 4, 0, 13, 9, 5, 1, 14, 10, 6, 2, 15, 11, 7, 3,
-];
-
-// Inverse map: dot index → its rank in the fill sequence.
-const LOADING_DOT_RANK: number[] = new Array(DOT_COUNT);
-LOADING_FILL_ORDER.forEach((dotIdx, rank) => {
-  LOADING_DOT_RANK[dotIdx] = rank;
-});
-
-const LOADING_PAUSE = 2; // extra units after last dot fills
-const LOADING_CYCLE = DOT_COUNT + LOADING_PAUSE; // 20 units per loop
-const LOADING_TRAIL_STEPS = DOT_COUNT - 1; // ranks until trail reaches min
-const LOADING_FILLED_OPACITY_MIN = 0.12;
-
-// Each dot independently tracks how long ago it was most recently filled,
-// so loop transitions are seamless — no global phase reset.
-const loadingTimeSinceFill = (angle: number, rank: number): number => {
-  if (angle < rank) return Infinity; // not yet reached on first pass
-  return (angle - rank) % LOADING_CYCLE;
-};
-
-const loadingLayout = (angle = 0): Vec3[] =>
-  Array.from({ length: DOT_COUNT }, (_, i) => {
-    const age = loadingTimeSinceFill(angle, LOADING_DOT_RANK[i]);
-    const trailT = Math.min(age / LOADING_TRAIL_STEPS, 1);
-    return {
-      x: i % 4,
-      y: Math.floor(i / 4),
-      z: age < DOT_COUNT ? lerp(GRID.max, GRID.max - 2, trailT) : GRID.max - 2,
-    };
-  });
-
-const loadingOpacities = (angle = 0): number[] =>
-  Array.from({ length: DOT_COUNT }, (_, i) => {
-    const age = loadingTimeSinceFill(angle, LOADING_DOT_RANK[i]);
-    if (age >= DOT_COUNT) return 0.12;
-    const trailT = Math.min(age / LOADING_TRAIL_STEPS, 1);
-    return lerp(1, LOADING_FILLED_OPACITY_MIN, trailT);
-  });
-
-const STATES: Record<StateKey, StateDef> = {
-  dormant: {
-    label: "Dormant",
-    layout: dormantLayout,
-    opacities: DEFAULT_OPACITIES,
-    animated: false,
-  },
-  thinking: {
-    label: "Thinking",
-    layout: thinkingLayout,
-    opacities: thinkingOpacities,
-    animated: true,
-    layoutSpeed: 3,
-    opacitySpeed: 4,
-  },
-  loading: {
-    label: "Loading",
-    layout: loadingLayout,
-    opacities: loadingOpacities,
-    animated: true,
-    layoutSpeed: 12,
-  },
-};
-
-export const STATE_KEYS = Object.keys(STATES) as StateKey[];
-
-export const getStateLabel = (key: StateKey): string => STATES[key].label;
-
-// ─── SPRING CONFIG ───────────────────────────────────────────────────────────
-
-const SPRING = {
-  type: "spring" as const,
-  stiffness: 100,
-  damping: 18,
-  mass: 0.8,
-};
-const STAGGER = 0.035;
-
-/** Seconds — eases discrete Z→radius steps while the sphere spins (imperative MV updates skip CSS/Motion transitions). */
-const RADIUS_SMOOTH_TAU_S = 0.2;
-
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 type DotMV = {
   cx: MotionValue<number>;
@@ -210,20 +16,43 @@ type DotMV = {
 
 type Snapshot = { sx: number; sy: number; r: number; opacity: number };
 
-const identity = () => Array.from({ length: DOT_COUNT }, (_, i) => i);
+// ─── CONSTANTS (grid-independent) ─────────────────────────────────────────────
 
-const sortByZ = (proj: Projected[]): number[] =>
-  identity().sort((a, b) => proj[a].z - proj[b].z);
+const VIEW_SIZE = 100;
+const SVG_PAD = 14;
+const SVG_SPAN = VIEW_SIZE - 2 * SVG_PAD;
 
-const orderEq = (a: number[], b: number[]) => {
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
+// Clamped size chart — back → front. Editable for tuning.
+const DOT_SIZES = [6, 8, 10, 12] as const;
+
+const SPRING = {
+  type: "spring" as const,
+  stiffness: 100,
+  damping: 18,
+  mass: 0.8,
+};
+const STAGGER = 0.01;
+
+/** Seconds — eases discrete Z→radius steps while the sphere spins. */
+const RADIUS_SMOOTH_TAU_S = 0.2;
+
+const THINKING_OPACITY_MIN = 0.12;
+const THINKING_OPACITY_MAX = 1;
+
+const LOADING_PAUSE = 2;
+const LOADING_FILLED_OPACITY_MIN = 0.12;
+
+// ─── PURE MATH ────────────────────────────────────────────────────────────────
+
+const rotateY = ({ x, y, z }: Vec3, a: number): Vec3 => {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return { x: x * c + z * s, y, z: -x * s + z * c };
 };
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 // Semi-implicit Euler step for a spring toward target = 1.
-// Runs inside the rAF tick so it shares the exact same dt.
 const stepBlend = (
   val: number,
   vel: number,
@@ -237,28 +66,240 @@ const stepBlend = (
   return { val: np, vel: nv };
 };
 
-// ─── COMPONENT ───────────────────────────────────────────────────────────────
+// ─── STATE SYSTEM ─────────────────────────────────────────────────────────────
+
+export type StateKey = "dormant" | "thinking" | "loading";
+
+type Opacities = number[] | ((angle?: number) => number[]);
+
+type StateDef = {
+  label: string;
+  layout: (angle?: number) => Vec3[];
+  opacities: Opacities;
+  animated: boolean;
+  /** Radians per second — passed to `layout()` (3D spin). */
+  layoutSpeed?: number;
+  /** Radians per second — phase for functional opacities. Defaults to `layoutSpeed` when omitted. */
+  opacitySpeed?: number;
+};
+
+const resolveOpacities = (o: Opacities, angle = 0): number[] =>
+  typeof o === "function" ? o(angle) : o;
+
+// ─── GRID CONFIG FACTORY ──────────────────────────────────────────────────────
+
+type GridConfig = {
+  g: number;
+  dotCount: number;
+  gridDef: { min: number; max: number; center: number };
+  project: (v: Vec3) => Projected;
+  identity: () => number[];
+  sortByZ: (proj: Projected[]) => number[];
+  states: Record<StateKey, StateDef>;
+};
+
+const buildGridConfig = (g: number): GridConfig => {
+  const dotCount = g * g;
+  const gridDef = { min: 0, max: g - 1, center: (g - 1) / 2 };
+
+  const snapSize = (z: number): number => {
+    const t = (z - gridDef.min) / (gridDef.max - gridDef.min);
+    const idx = Math.round(
+      Math.max(0, Math.min(1, t)) * (DOT_SIZES.length - 1),
+    );
+    return DOT_SIZES[idx];
+  };
+
+  const project = (v: Vec3): Projected => ({
+    sx:
+      SVG_PAD + ((v.x - gridDef.min) / (gridDef.max - gridDef.min)) * SVG_SPAN,
+    sy:
+      SVG_PAD + ((v.y - gridDef.min) / (gridDef.max - gridDef.min)) * SVG_SPAN,
+    size: snapSize(v.z),
+    z: v.z,
+  });
+
+  const identity = () => Array.from({ length: dotCount }, (_, i) => i);
+
+  const sortByZ = (proj: Projected[]): number[] =>
+    identity().sort((a, b) => proj[a].z - proj[b].z);
+
+  // Fibonacci sphere — scales to fit within the grid using center as radius.
+  const sphereBase: Vec3[] = (() => {
+    const phi = Math.PI * (3 - Math.sqrt(5));
+    return Array.from({ length: dotCount }, (_, i) => {
+      const y = 1 - (i / (dotCount - 1)) * 2;
+      const r = Math.sqrt(1 - y * y);
+      const theta = phi * i;
+      return { x: Math.cos(theta) * r, y, z: Math.sin(theta) * r };
+    });
+  })();
+
+  // Default opacities: corners dimmed, checkerboard interior.
+  const defaultOpacities: number[] = Array.from(
+    { length: dotCount },
+    (_, i) => {
+      const col = i % g;
+      const row = Math.floor(i / g);
+      const isCorner =
+        (col === 0 || col === g - 1) && (row === 0 || row === g - 1);
+      return isCorner ? 0.12 : col % 2 === row % 2 ? 1 : 0.45;
+    },
+  );
+
+  // Loading sequences: column-by-column, bottom-to-top within each column.
+  const loadingFillOrder: number[] = [];
+  for (let col = 0; col < g; col++)
+    for (let row = g - 1; row >= 0; row--) loadingFillOrder.push(row * g + col);
+
+  const loadingDotRank: number[] = new Array(dotCount);
+  loadingFillOrder.forEach((dotIdx, rank) => {
+    loadingDotRank[dotIdx] = rank;
+  });
+
+  const loadingCycle = dotCount + LOADING_PAUSE;
+  const loadingTrailSteps = dotCount - 1;
+
+  // Each dot independently tracks how long ago it was most recently filled.
+  const loadingTimeSinceFill = (angle: number, rank: number): number => {
+    if (angle < rank) return Infinity;
+    return (angle - rank) % loadingCycle;
+  };
+
+  // ─── Layout functions ──────────────────────────────────────────────────────
+
+  // Static N×N grid. Non-edge dots sit one Z-level higher than the outer ring.
+  const dormantLayout = (): Vec3[] =>
+    Array.from({ length: dotCount }, (_, i) => {
+      const col = i % g;
+      const row = Math.floor(i / g);
+      const isInner = col > 0 && col < g - 1 && row > 0 && row < g - 1;
+      return {
+        x: col,
+        y: row,
+        z: isInner ? gridDef.max - 1 : gridDef.max - 2,
+      };
+    });
+
+  const thinkingLayout = (angle = 0): Vec3[] =>
+    sphereBase.map((pt) => {
+      const r = rotateY(pt, angle);
+      return {
+        x: gridDef.center + r.x * gridDef.center,
+        y: gridDef.center + r.y * gridDef.center,
+        z: gridDef.center + r.z * gridDef.center,
+      };
+    });
+
+  const loadingLayout = (angle = 0): Vec3[] =>
+    Array.from({ length: dotCount }, (_, i) => {
+      const age = loadingTimeSinceFill(angle, loadingDotRank[i]);
+      const trailT = Math.min(age / loadingTrailSteps, 1);
+      return {
+        x: i % g,
+        y: Math.floor(i / g),
+        z:
+          age < dotCount
+            ? lerp(gridDef.max, gridDef.max - 2, trailT)
+            : gridDef.max - 2,
+      };
+    });
+
+  // ─── Opacity functions ─────────────────────────────────────────────────────
+
+  // One sine wave along Fibonacci spiral index order; `opacityAngle` is
+  // advanced by `opacitySpeed` (rad/s), independent of layout rotation.
+  const thinkingOpacities = (opacityAngle = 0): number[] =>
+    Array.from({ length: dotCount }, (_, i) => {
+      const u = (i / dotCount + 0.5) % 1;
+      const w = 0.5 + 0.5 * Math.sin(2 * Math.PI * u + opacityAngle);
+      return (
+        THINKING_OPACITY_MIN + (THINKING_OPACITY_MAX - THINKING_OPACITY_MIN) * w
+      );
+    });
+
+  const loadingOpacities = (angle = 0): number[] =>
+    Array.from({ length: dotCount }, (_, i) => {
+      const age = loadingTimeSinceFill(angle, loadingDotRank[i]);
+      if (age >= dotCount) return LOADING_FILLED_OPACITY_MIN;
+      const trailT = Math.min(age / loadingTrailSteps, 1);
+      return lerp(1, LOADING_FILLED_OPACITY_MIN, trailT);
+    });
+
+  // ─── State registry ────────────────────────────────────────────────────────
+
+  const states: Record<StateKey, StateDef> = {
+    dormant: {
+      label: "Dormant",
+      layout: dormantLayout,
+      opacities: defaultOpacities,
+      animated: false,
+    },
+    thinking: {
+      label: "Thinking",
+      layout: thinkingLayout,
+      opacities: thinkingOpacities,
+      animated: true,
+      layoutSpeed: 3,
+      opacitySpeed: 4,
+    },
+    loading: {
+      label: "Loading",
+      layout: loadingLayout,
+      opacities: loadingOpacities,
+      animated: true,
+      layoutSpeed: 12,
+    },
+  };
+
+  return { g, dotCount, gridDef, project, identity, sortByZ, states };
+};
+
+// ─── EXPORTS ──────────────────────────────────────────────────────────────────
+
+export const STATE_KEYS = ["dormant", "thinking", "loading"] as StateKey[];
+
+export const getStateLabel = (key: StateKey): string =>
+  ({ dormant: "Dormant", thinking: "Thinking", loading: "Loading" })[key];
+
+// ─── COMPONENT ────────────────────────────────────────────────────────────────
+
+const orderEq = (a: number[], b: number[]) => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+};
 
 const DotIcon = ({
   size = 200,
   state = "dormant",
   color,
   style,
+  grid = 4,
 }: {
   size?: number;
   state?: StateKey;
   color?: string;
   style?: CSSProperties;
+  grid?: number;
 }) => {
+  const cfg = useMemo(() => {
+    const g = Math.min(12, Math.max(3, Math.round(grid)));
+    return buildGridConfig(g);
+  }, [grid]);
+
   const [spinning, setSpinning] = useState(false);
-  const [paintOrder, setPaintOrder] = useState<number[]>(identity);
+  const [paintOrder, setPaintOrder] = useState<number[]>(() => cfg.identity());
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  // Reinitialize MotionValues when the grid size changes.
+  const cfgRef = useRef(cfg);
   const mvsRef = useRef<DotMV[] | null>(null);
-  if (!mvsRef.current) {
-    const def = STATES[state];
-    const proj = def.layout(0).map(project);
+  if (!mvsRef.current || cfgRef.current !== cfg) {
+    cfgRef.current = cfg;
+    const def = cfg.states[state];
+    const proj = def.layout(0).map(cfg.project);
     const opa = resolveOpacities(def.opacities, 0);
     mvsRef.current = proj.map((p, i) => ({
       cx: motionValue(p.sx),
@@ -284,11 +325,11 @@ const DotIcon = ({
     (targets: Projected[], opacities: number[]) => {
       stopAnims();
       mvs.forEach((mv, i) => {
-        const cfg = { ...SPRING, delay: i * STAGGER };
-        ctrlsRef.current.push(animate(mv.cx, targets[i].sx, cfg));
-        ctrlsRef.current.push(animate(mv.cy, targets[i].sy, cfg));
-        ctrlsRef.current.push(animate(mv.r, targets[i].size / 2, cfg));
-        ctrlsRef.current.push(animate(mv.opacity, opacities[i], cfg));
+        const springOpts = { ...SPRING, delay: i * STAGGER };
+        ctrlsRef.current.push(animate(mv.cx, targets[i].sx, springOpts));
+        ctrlsRef.current.push(animate(mv.cy, targets[i].sy, springOpts));
+        ctrlsRef.current.push(animate(mv.r, targets[i].size / 2, springOpts));
+        ctrlsRef.current.push(animate(mv.opacity, opacities[i], springOpts));
       });
     },
     [mvs, stopAnims],
@@ -307,9 +348,8 @@ const DotIcon = ({
       if (rafRef.current) return;
       tRef.current = null;
 
-      // Per-dot blend springs, computed in-loop so they share the same dt.
       const blends = sources
-        ? Array.from({ length: DOT_COUNT }, () => ({ val: 0, vel: 0 }))
+        ? Array.from({ length: cfg.dotCount }, () => ({ val: 0, vel: 0 }))
         : null;
       let elapsed = 0;
 
@@ -328,7 +368,7 @@ const DotIcon = ({
           opacityAngleRef.current += opacitySpeed * dt;
 
           if (blends) {
-            for (let i = 0; i < DOT_COUNT; i++) {
+            for (let i = 0; i < cfg.dotCount; i++) {
               const b = blends[i];
               if (b.val < 1 && elapsed >= i * STAGGER) {
                 const next = stepBlend(b.val, b.vel, dt);
@@ -338,7 +378,7 @@ const DotIcon = ({
             }
           }
 
-          const proj = def.layout(layoutAngleRef.current).map(project);
+          const proj = def.layout(layoutAngleRef.current).map(cfg.project);
           const opa = resolveOpacities(def.opacities, opacityAngleRef.current);
 
           proj.forEach((p, i) => {
@@ -364,7 +404,7 @@ const DotIcon = ({
             }
           });
 
-          const order = sortByZ(proj);
+          const order = cfg.sortByZ(proj);
           setPaintOrder((prev) => (orderEq(prev, order) ? prev : order));
         }
         tRef.current = now;
@@ -372,13 +412,13 @@ const DotIcon = ({
       };
       rafRef.current = requestAnimationFrame(tick);
     },
-    [mvs],
+    [mvs, cfg],
   );
 
-  // ─── State transitions ────────────────────────────────────────────────────
+  // ─── State transitions ─────────────────────────────────────────────────────
 
   useEffect(() => {
-    const def = STATES[state];
+    const def = cfg.states[state];
 
     stopLoop();
     stopAnims();
@@ -394,12 +434,12 @@ const DotIcon = ({
       }));
 
       setSpinning(true);
-      setPaintOrder(identity());
+      setPaintOrder(cfg.identity());
       startLoop(state, def, src);
     } else {
       setSpinning(false);
-      setPaintOrder(identity());
-      const proj = def.layout(0).map(project);
+      setPaintOrder(cfg.identity());
+      const proj = def.layout(0).map(cfg.project);
       const opa = resolveOpacities(def.opacities, 0);
       morphTo(proj, opa);
     }
@@ -408,13 +448,17 @@ const DotIcon = ({
       stopAnims();
       stopLoop();
     };
-  }, [state, morphTo, startLoop, stopLoop, stopAnims, mvs]);
+  }, [state, cfg, morphTo, startLoop, stopLoop, stopAnims, mvs]);
 
   useEffect(() => () => stopLoop(), [stopLoop]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
-  const order = spinning ? paintOrder : identity();
+  // Guard against a stale paintOrder from a previous grid size during re-render.
+  const order =
+    spinning && paintOrder.length === cfg.dotCount
+      ? paintOrder
+      : cfg.identity();
 
   return (
     <div

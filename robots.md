@@ -2,7 +2,7 @@
 
 ## Core concept:
 
-Dot grid (defaulting to 16 dots) treated as vertices in a full cartesian coordinate space (`Vec3`). All three axes share the same integer coordinate space defined by `GRID` (see source), centered on `GRID.center`. Dots are uniform in the backend — size is derived purely from Z-depth at render time via orthographic projection. Uses `fill="currentColor"` so color is controlled externally.
+Dot grid (defaulting to a 4×4 = 16 dot layout, configurable via the `grid` prop) treated as vertices in a full cartesian coordinate space (`Vec3`). All three axes share the same integer coordinate space defined by `gridDef` (derived from `grid`), centered on `gridDef.center`. Dots are uniform in the backend — size is derived purely from Z-depth at render time via orthographic projection. Uses `fill="currentColor"` so color is controlled externally.
 
 ## 3D engine:
 
@@ -22,7 +22,7 @@ Layout functions return `Vec3[]` — pure 3D positions, no SVG or size info. Pro
 
 Two states exist; more can be added by registering one `STATES` entry plus a layout function:
 
-**Dormant** — static 4×4 grid on Z≈0. The inner 2×2 block uses a higher Z than the outer ring (see `INNER` and `dormantLayout` in source), which drives size via `snapSize` and gives a depth hierarchy. Uses `DEFAULT_OPACITIES`.
+**Dormant** — static N×N grid on Z≈0. All non-edge (inner) dots use a higher Z than the outer ring (see `dormantLayout` in source), which drives size via `snapSize` and gives a depth hierarchy. Uses `defaultOpacities` (corner-dimmed checkerboard pattern, generated for the active grid size).
 
 **Thinking** — Fibonacci sphere (`SPHERE_BASE`) scaled and centered using `GRID.center` for all three axes. While active, the layout angle advances each animation frame using that state’s `speed` (radians per second; integrated in the `requestAnimationFrame` loop). Z-depth controls both dot size and paint order. Uses `THINKING_OPACITIES`.
 
@@ -38,9 +38,9 @@ The blend spring solver (`stepBlend`) uses the `SPRING` config and runs inside t
 
 ## Props:
 
-`size` (px, default in component), `state` (`StateKey`, default `"dormant"`), `color`, `style`.
+`size` (px, default in component), `state` (`StateKey`, default `"dormant"`), `grid` (N for an N×N dot layout, default `4`, clamped internally to `[3, 12]`), `color`, `style`.
 
-State is controlled externally via the `state` prop. `StateKey`, `STATE_KEYS`, and `getStateLabel` are exported for parent components.
+State is controlled externally via the `state` prop. `StateKey`, `STATE_KEYS`, and `getStateLabel` are exported for parent components. The `grid` prop drives a `buildGridConfig(g)` factory that produces all grid-dependent values — `dotCount`, `gridDef`, layout functions, opacity patterns, and the state registry — as a single memoized config object.
 
 ## Dependencies:
 
