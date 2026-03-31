@@ -205,13 +205,25 @@ const resolveOpacities = (o: Opacities, angle = 0): number[] =>
 // Dormant dots sit at a consistent near-front Z by default.
 // The 4×4 override uses DORMANT_4x4_Z for per-dot size control.
 const dormantLayout = (config: GridConfig): Vec3[] => {
-  const useOverride = config.n === 4;
-  const defaultZ = Math.max(config.grid.min, config.grid.max - 1);
+  const { n } = config;
+  const useOverride = n === 4;
+
+  // Invert dot size relative to grid density: smaller grids → larger dots.
+  // Steps through DOT_SIZES largest→smallest as n grows, skipping n=4 which
+  // has its own per-dot Z override. n ≤ 3 → step 0 (largest), n=5 → step 1,
+  // n=6 → step 2, n≥7 → step 3+ (clamped to smallest). Adapts automatically
+  // if DOT_SIZES gains or loses entries.
+  const step = n <= 3 ? 0 : n - 4;
+  const sizeIdx = Math.max(0, DOT_SIZES.length - 1 - step);
+  // Back-solve the Z that snapSize will round back to sizeIdx.
+  const defaultZ = Math.round(
+    (sizeIdx / (DOT_SIZES.length - 1)) * config.grid.max,
+  );
 
   return Array.from({ length: config.dotCount }, (_, i) => ({
-    x: i % config.n,
-    y: Math.floor(i / config.n),
-    z: useOverride ? DORMANT_4x4_Z[i] : 0,
+    x: i % n,
+    y: Math.floor(i / n),
+    z: useOverride ? DORMANT_4x4_Z[i] : defaultZ,
   }));
 };
 
