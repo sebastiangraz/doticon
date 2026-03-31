@@ -95,12 +95,20 @@ export const Route = createFileRoute("/")({
               <DotIcon size={32} state={"thinking"} />
               <DotIcon size={32} state={"thinking"} grid={3} />
               <DotIcon size={32} state={"thinking"} grid={5} />
+              <DotIcon size={100} state={"thinking"} grid={4} />
+              <DotIcon size={100} state={"thinking"} grid={5} />
+              <DotIcon size={100} state={"thinking"} grid={6} />
+              <DotIcon size={100} state={"thinking"} grid={7} />
               <DotIcon size={16} state={"thinking"} />
             </ExposeProps>
             <ExposeProps className={styles.prop}>
               <DotIcon size={32} state={"loading"} />
               <DotIcon size={32} state={"loading"} grid={3} />
               <DotIcon size={32} state={"loading"} grid={5} />
+              <DotIcon size={100} state={"loading"} grid={4} />
+              <DotIcon size={100} state={"loading"} grid={5} />
+              <DotIcon size={100} state={"loading"} grid={6} />
+              <DotIcon size={100} state={"loading"} grid={7} />
               <DotIcon size={16} state={"loading"} />
             </ExposeProps>
           </div>

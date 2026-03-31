@@ -155,7 +155,8 @@ const buildSphereBase = (config: GridConfig): Vec3[] => {
   const { dotCount } = config;
   const phi = Math.PI * (3 - Math.sqrt(5));
   return Array.from({ length: dotCount }, (_, i) => {
-    const y = 1 - (i / (dotCount - 1)) * 2;
+    // Flip latitude vs classic Fibonacci so low i (dormant top rows) maps to low grid y.
+    const y = dotCount <= 1 ? 0 : (i / (dotCount - 1)) * 2 - 1;
     const r = Math.sqrt(1 - y * y);
     const theta = phi * i;
     return { x: Math.cos(theta) * r, y, z: Math.sin(theta) * r };
@@ -351,7 +352,7 @@ export const getStateLabel = (key: StateKey): string => STATE_LABELS[key];
 const SPRING = {
   type: "spring" as const,
   stiffness: 240,
-  damping: 24,
+  damping: 25,
   mass: 0.8,
 };
 
