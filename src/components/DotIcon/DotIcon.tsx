@@ -203,44 +203,50 @@ const resolveOpacities = (o: Opacities, angle = 0): number[] =>
 
 // ─── Layout / opacity functions ───────────────────────────────────────────────
 
-// Dormant dots sit at a consistent near-front Z by default.
-// The 4×4 override uses DORMANT_4x4_Z for per-dot size control.
-const dormantLayout = (config: GridConfig): Vec3[] => {
-  const { n } = config;
-  const useOverride = n === 4;
-
-  // Invert dot size relative to grid density: smaller grids → larger dots.
-  // Steps through DOT_SIZES largest→smallest as n grows, skipping n=4 which
-  // has its own per-dot Z override. n ≤ 3 → step 0 (largest), n=5 → step 1,
-  // n=6 → step 2, n≥7 → step 3+ (clamped to smallest). Adapts automatically
-  // if DOT_SIZES gains or loses entries.
-  const step = n <= 3 ? 0 : n - 4;
+// Inverse grid-density Z: smaller grids → higher Z (larger dots), larger grids
+// → lower Z (smaller dots). Steps through DOT_SIZES largest→smallest as n
+// grows, skipping n=4 (which has its own per-dot override). Back-solves to the
+// Z value that snapSize will correctly round back to the target size index.
+// Adapts automatically if DOT_SIZES gains or loses entries.
+//
+// n ≤ 3 → step 0 (DOT_SIZES max)
+// n = 5 → step 1
+// n = 6 → step 2
+// n ≥ 7 → step 3+ (clamped to DOT_SIZES min)
+const gridBaseZ = (config: GridConfig): number => {
+  const step = config.n <= 3 ? 0 : config.n - 4;
   const sizeIdx = Math.max(0, DOT_SIZES.length - 1 - step);
-  // Back-solve the Z that snapSize will round back to sizeIdx.
-  const defaultZ = Math.round(
-    (sizeIdx / (DOT_SIZES.length - 1)) * config.grid.max,
-  );
+  return Math.round((sizeIdx / (DOT_SIZES.length - 1)) * config.grid.max);
+};
 
+// Dormant: all dots at baseZ (static logo pattern; opacity carries the design).
+// n=4 uses DORMANT_4x4_Z for per-dot size control instead.
+const dormantLayout = (config: GridConfig): Vec3[] => {
+  const baseZ = gridBaseZ(config);
   return Array.from({ length: config.dotCount }, (_, i) => ({
-    x: i % n,
-    y: Math.floor(i / n),
-    z: useOverride ? DORMANT_4x4_Z[i] : defaultZ,
+    x: i % config.n,
+    y: Math.floor(i / config.n),
+    z: config.n === 4 ? DORMANT_4x4_Z[i] : baseZ,
   }));
 };
 
+// Thinking: sphere Z mapped onto [0, baseZ] so front dots match the grid's
+// target size and size variation scales down with grid density.
 const thinkingLayout = (
   config: GridConfig,
   sphereBase: Vec3[],
   angle = 0,
-): Vec3[] =>
-  sphereBase.map((pt) => {
+): Vec3[] => {
+  const baseZ = gridBaseZ(config);
+  return sphereBase.map((pt) => {
     const r = rotateY(pt, angle);
     return {
       x: config.grid.center + r.x * config.grid.center,
       y: config.grid.center + r.y * config.grid.center,
-      z: config.grid.center + r.z * config.grid.center,
+      z: baseZ * (0.5 + 0.5 * r.z),
     };
   });
+};
 
 const THINKING_OPACITY_MIN = 0.12;
 const THINKING_OPACITY_MAX = 1;
@@ -267,11 +273,14 @@ const loadingTimeSinceFill = (
   return (angle - rank) % cycle;
 };
 
+// Loading: fill front at baseZ, trail falls to baseZ - 2 (clamped to grid.min).
 const loadingLayout = (
   config: GridConfig,
   dotRank: number[],
   angle = 0,
 ): Vec3[] => {
+  const baseZ = gridBaseZ(config);
+  const trailZ = Math.max(config.grid.min, baseZ - 2);
   const cycle = config.dotCount + LOADING_PAUSE;
   const trailSteps = config.dotCount - 1;
   return Array.from({ length: config.dotCount }, (_, i) => {
@@ -280,10 +289,7 @@ const loadingLayout = (
     return {
       x: i % config.n,
       y: Math.floor(i / config.n),
-      z:
-        age < config.dotCount
-          ? lerp(config.grid.max, config.grid.max - 2, trailT)
-          : config.grid.max - 2,
+      z: age < config.dotCount ? lerp(baseZ, trailZ, trailT) : trailZ,
     };
   });
 };
