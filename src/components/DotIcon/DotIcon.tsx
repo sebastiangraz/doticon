@@ -1,6 +1,13 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useMemo } from "react";
 import type { CSSProperties } from "react";
-import { motion, animate, motionValue, type MotionValue } from "motion/react";
+import {
+  motion,
+  animate,
+  motionValue,
+  transformValue,
+  useTime,
+  type MotionValue,
+} from "motion/react";
 
 // ─── 3D ENGINE ───────────────────────────────────────────────────────────────
 
@@ -191,13 +198,10 @@ export const getStateLabel = (key: StateKey): string => STATES[key].label;
 const SPRING = {
   type: "spring" as const,
   stiffness: 100,
-  damping: 18,
-  mass: 0.8,
+  damping: 24,
+  mass: 1,
 };
 const STAGGER = 0.035;
-
-/** Seconds — eases discrete Z→radius steps while the sphere spins (imperative MV updates skip CSS/Motion transitions). */
-const RADIUS_SMOOTH_TAU_S = 0.2;
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -211,21 +215,9 @@ type DotMV = {
 type Snapshot = { sx: number; sy: number; r: number; opacity: number };
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-// Semi-implicit Euler step for a spring toward target = 1.
-// Runs inside the rAF tick so it shares the exact same dt.
-const stepBlend = (
-  val: number,
-  vel: number,
-  dt: number,
-): { val: number; vel: number } => {
-  const force = -SPRING.stiffness * (val - 1) - SPRING.damping * vel;
-  const nv = vel + (force / SPRING.mass) * dt;
-  const np = val + nv * dt;
-  if (Math.abs(np - 1) < 0.001 && Math.abs(nv) < 0.01)
-    return { val: 1, vel: 0 };
-  return { val: np, vel: nv };
-};
+const clamp = (v: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, v));
+const clamp01 = (v: number) => clamp(v, 0, 1);
 
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 
@@ -240,8 +232,12 @@ const DotIcon = ({
   color?: string;
   style?: CSSProperties;
 }) => {
-  const stateRef = useRef(state);
-  stateRef.current = state;
+  const time = useTime();
+  const phaseStartMsRef = useRef(0);
+  const prevStateRef = useRef<StateKey>(state);
+
+  const defRef = useRef<StateDef>(STATES[state]);
+  defRef.current = STATES[state];
 
   const mvsRef = useRef<DotMV[] | null>(null);
   if (!mvsRef.current) {
@@ -257,16 +253,19 @@ const DotIcon = ({
   }
   const mvs = mvsRef.current;
 
-  const rafRef = useRef<number | null>(null);
-  const layoutAngleRef = useRef(0);
-  const opacityAngleRef = useRef(0);
-  const tRef = useRef<number | null>(null);
   const ctrlsRef = useRef<{ stop: () => void }[]>([]);
 
   const stopAnims = useCallback(() => {
     ctrlsRef.current.forEach((c) => c.stop());
     ctrlsRef.current = [];
   }, []);
+
+  const sourcesRef = useRef<Snapshot[] | null>(null);
+  const blendsRef = useRef<MotionValue<number>[] | null>(null);
+  if (!blendsRef.current) {
+    blendsRef.current = Array.from({ length: DOT_COUNT }, () => motionValue(1));
+  }
+  const blends = blendsRef.current;
 
   const morphTo = useCallback(
     (targets: Projected[], opacities: number[]) => {
@@ -282,105 +281,122 @@ const DotIcon = ({
     [mvs, stopAnims],
   );
 
-  const stopLoop = useCallback(() => {
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      tRef.current = null;
-    }
-  }, []);
+  const phaseTime = useMemo(
+    () => transformValue(() => time.get() - phaseStartMsRef.current),
+    [time],
+  );
 
-  const startLoop = useCallback(
-    (key: StateKey, def: StateDef, sources?: Snapshot[]) => {
-      if (rafRef.current) return;
-      tRef.current = null;
+  const layoutAngle = useMemo(
+    () =>
+      transformValue(() => {
+        const def = defRef.current;
+        const t = phaseTime.get() / 1000;
+        return (def.layoutSpeed ?? 0) * t;
+      }),
+    [phaseTime],
+  );
 
-      // Per-dot blend springs, computed in-loop so they share the same dt.
-      const blends = sources
-        ? Array.from({ length: DOT_COUNT }, () => ({ val: 0, vel: 0 }))
-        : null;
-      let elapsed = 0;
+  const opacityAngle = useMemo(
+    () =>
+      transformValue(() => {
+        const def = defRef.current;
+        const t = phaseTime.get() / 1000;
+        const layoutSpeed = def.layoutSpeed ?? 0;
+        const opacitySpeed = def.opacitySpeed ?? layoutSpeed;
+        return opacitySpeed * t;
+      }),
+    [phaseTime],
+  );
 
-      const tick = () => {
-        if (stateRef.current !== key) {
-          rafRef.current = null;
-          return;
-        }
-        const now = performance.now();
-        if (tRef.current !== null) {
-          const dt = (now - tRef.current) / 1000;
-          elapsed += dt;
-          const layoutSpeed = def.layoutSpeed ?? 0.6;
-          const opacitySpeed = def.opacitySpeed ?? layoutSpeed;
-          layoutAngleRef.current += layoutSpeed * dt;
-          opacityAngleRef.current += opacitySpeed * dt;
+  const targets = useMemo(
+    () =>
+      transformValue(() => {
+        const def = defRef.current;
+        return def.layout(layoutAngle.get()).map(project);
+      }),
+    [layoutAngle],
+  );
 
-          if (blends) {
-            for (let i = 0; i < DOT_COUNT; i++) {
-              const b = blends[i];
-              if (b.val < 1 && elapsed >= i * STAGGER) {
-                const next = stepBlend(b.val, b.vel, dt);
-                b.val = next.val;
-                b.vel = next.vel;
-              }
-            }
-          }
+  const targetOpacities = useMemo(
+    () =>
+      transformValue(() => {
+        const def = defRef.current;
+        return resolveOpacities(def.opacities, opacityAngle.get());
+      }),
+    [opacityAngle],
+  );
 
-          const proj = def.layout(layoutAngleRef.current).map(project);
-          const opa = resolveOpacities(def.opacities, opacityAngleRef.current);
-
-          proj.forEach((p, i) => {
-            const tx = p.sx;
-            const ty = p.sy;
-            const tr = p.size / 2;
-            const to = opa[i];
-
-            const rAlpha = 1 - Math.exp(-dt / RADIUS_SMOOTH_TAU_S);
-            if (sources && blends) {
-              const b = blends[i].val;
-              const s = sources[i];
-              mvs[i].cx.set(lerp(s.sx, tx, b));
-              mvs[i].cy.set(lerp(s.sy, ty, b));
-              const desiredR = lerp(s.r, tr, b);
-              mvs[i].r.set(lerp(mvs[i].r.get(), desiredR, rAlpha));
-              mvs[i].opacity.set(lerp(s.opacity, to, b));
-            } else {
-              mvs[i].cx.set(tx);
-              mvs[i].cy.set(ty);
-              mvs[i].r.set(lerp(mvs[i].r.get(), tr, rAlpha));
-              mvs[i].opacity.set(to);
-            }
-          });
-
-        }
-        tRef.current = now;
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-    },
-    [mvs],
+  const animatedMvs = useMemo<DotMV[]>(
+    () =>
+      Array.from({ length: DOT_COUNT }, (_, i) => ({
+        cx: transformValue(() => {
+          const src = sourcesRef.current?.[i];
+          const t = targets.get()[i];
+          const b = clamp01(blends[i].get());
+          return src ? lerp(src.sx, t.sx, b) : t.sx;
+        }),
+        cy: transformValue(() => {
+          const src = sourcesRef.current?.[i];
+          const t = targets.get()[i];
+          const b = clamp01(blends[i].get());
+          return src ? lerp(src.sy, t.sy, b) : t.sy;
+        }),
+        r: transformValue(() => {
+          const src = sourcesRef.current?.[i];
+          const t = targets.get()[i];
+          const b = clamp01(blends[i].get());
+          const tr = t.size / 2;
+          const mixed = src ? lerp(src.r, tr, b) : tr;
+          return Math.max(0, mixed);
+        }),
+        opacity: transformValue(() => {
+          const src = sourcesRef.current?.[i];
+          const to = targetOpacities.get()[i];
+          const b = clamp01(blends[i].get());
+          const mixed = src ? lerp(src.opacity, to, b) : to;
+          return clamp01(mixed);
+        }),
+      })),
+    [blends, targets, targetOpacities],
   );
 
   // ─── State transitions ────────────────────────────────────────────────────
 
   useEffect(() => {
     const def = STATES[state];
+    const prevState = prevStateRef.current;
+    prevStateRef.current = state;
 
-    stopLoop();
     stopAnims();
-    layoutAngleRef.current = 0;
-    opacityAngleRef.current = 0;
+    phaseStartMsRef.current = time.get();
 
     if (def.animated) {
-      const src: Snapshot[] = mvs.map((mv) => ({
+      const prevMvs = STATES[prevState].animated ? animatedMvs : mvs;
+      sourcesRef.current = prevMvs.map((mv) => ({
         sx: mv.cx.get(),
         sy: mv.cy.get(),
         r: mv.r.get(),
         opacity: mv.opacity.get(),
       }));
 
-      startLoop(state, def, src);
+      blends.forEach((b) => b.set(0));
+      blends.forEach((b, i) => {
+        const cfg = { ...SPRING, delay: i * STAGGER };
+        ctrlsRef.current.push(animate(b, 1, cfg));
+      });
     } else {
+      const prevMvs = STATES[prevState].animated ? animatedMvs : mvs;
+      // Ensure the static MotionValues start from the currently-rendered pose,
+      // otherwise we’d animate from stale `mvs` values after being in an animated state.
+      for (let i = 0; i < DOT_COUNT; i++) {
+        mvs[i].cx.set(prevMvs[i].cx.get());
+        mvs[i].cy.set(prevMvs[i].cy.get());
+        mvs[i].r.set(prevMvs[i].r.get());
+        mvs[i].opacity.set(prevMvs[i].opacity.get());
+      }
+
+      sourcesRef.current = null;
+      blends.forEach((b) => b.set(1));
       const proj = def.layout(0).map(project);
       const opa = resolveOpacities(def.opacities, 0);
       morphTo(proj, opa);
@@ -388,13 +404,12 @@ const DotIcon = ({
 
     return () => {
       stopAnims();
-      stopLoop();
     };
-  }, [state, morphTo, startLoop, stopLoop, stopAnims, mvs]);
-
-  useEffect(() => () => stopLoop(), [stopLoop]);
+  }, [state, morphTo, stopAnims, mvs, time, blends, animatedMvs]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
+
+  const renderMvs = STATES[state].animated ? animatedMvs : mvs;
 
   return (
     <div
@@ -412,7 +427,7 @@ const DotIcon = ({
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: "visible" }}
       >
-        {mvs.map((mv, i) => (
+        {renderMvs.map((mv, i) => (
           <motion.circle
             key={i}
             cx={mv.cx}
