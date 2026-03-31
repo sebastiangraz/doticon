@@ -6,10 +6,9 @@ import { motion, animate, motionValue, type MotionValue } from "motion/react";
 
 type Vec3 = { x: number; y: number; z: number };
 
-// Grid lives at integer coords 0–3; center at 1.5,1.5,0.
-// Z snap zones: z < -1 → 4px, [-1,0) → 5px, [0,1) → 7px, ≥ 1 → 8px
+// Grid lives at integer coords 0–3 on all axes; center at 1.5,1.5,1.5.
+// Z snap zones: 0 → 6px, 1 → 8px, 2 → 10px, 3 → 12px
 const GRID = { min: 0, max: 3, center: 1.5 } as const;
-const Z_EXTENT = 1.5;
 
 const VIEW_SIZE = 100;
 const SVG_PAD = 14;
@@ -49,7 +48,7 @@ const rotateY = ({ x, y, z }: Vec3, a: number): Vec3 => {
 // ─── Orthographic projection (drop Z, map X/Y → SVG) ────────────────────────
 
 const snapSize = (z: number): number => {
-  const t = (z + Z_EXTENT) / (2 * Z_EXTENT);
+  const t = (z - GRID.min) / (GRID.max - GRID.min);
   const idx = Math.round(Math.max(0, Math.min(1, t)) * (DOT_SIZES.length - 1));
   return DOT_SIZES[idx];
 };
@@ -102,16 +101,16 @@ const dormantLayout = (): Vec3[] =>
   Array.from({ length: DOT_COUNT }, (_, i) => ({
     x: i % 4,
     y: Math.floor(i / 4),
-    z: INNER.has(i) ? 0.5 : -0.5,
+    z: INNER.has(i) ? GRID.max - 1 : GRID.max - 2,
   }));
 
 const thinkingLayout = (angle = 0): Vec3[] =>
   SPHERE_BASE.map((pt) => {
     const r = rotateY(pt, angle);
     return {
-      x: GRID.center + r.x * Z_EXTENT,
-      y: GRID.center + r.y * Z_EXTENT,
-      z: r.z * Z_EXTENT,
+      x: GRID.center + r.x * GRID.center,
+      y: GRID.center + r.y * GRID.center,
+      z: GRID.center + r.z * GRID.center,
     };
   });
 
@@ -147,7 +146,7 @@ const loadingLayout = (angle = 0): Vec3[] =>
     return {
       x: i % 4,
       y: Math.floor(i / 4),
-      z: age < DOT_COUNT ? lerp(Z_EXTENT, -0.5, trailT) : -0.5,
+      z: age < DOT_COUNT ? lerp(GRID.max, GRID.max - 2, trailT) : GRID.max - 2,
     };
   });
 
