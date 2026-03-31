@@ -185,7 +185,9 @@ const buildLoadingOrder = (
 
 export type StateKey = "dormant" | "thinking" | "loading";
 
-type Opacities = number[] | ((angle?: number) => number[]);
+type OpacitySolveCtx = { layoutAngle: number; opacityAngle: number };
+
+type Opacities = number[] | ((ctx: OpacitySolveCtx) => number[]);
 
 type StateDef = {
   label: string;
@@ -198,8 +200,8 @@ type StateDef = {
   opacitySpeed?: number;
 };
 
-const resolveOpacities = (o: Opacities, angle = 0): number[] =>
-  typeof o === "function" ? o(angle) : o;
+const resolveOpacities = (o: Opacities, ctx: OpacitySolveCtx): number[] =>
+  typeof o === "function" ? o(ctx) : o;
 
 // ─── Layout / opacity functions ───────────────────────────────────────────────
 
@@ -251,14 +253,22 @@ const thinkingLayout = (
 const THINKING_OPACITY_MIN = 0.12;
 const THINKING_OPACITY_MAX = 1;
 
-// Sine wave along Fibonacci spiral index order; +0.5 = 50% path offset.
-const thinkingOpacities = (dotCount: number, opacityAngle = 0): number[] =>
-  Array.from({ length: dotCount }, (_, i) => {
-    const u = (i / dotCount + 0.5) % 1;
+// Sine along spiral index (opacityAngle) × back-face fade from rotateY (layoutAngle).
+// thinkingLayout maps z = baseZ*(0.5 + 0.5*r.z); r.z = -1 ⇒ z = 0 (furthest back).
+const thinkingOpacities = (
+  config: GridConfig,
+  sphereBase: Vec3[],
+  layoutAngle: number,
+  opacityAngle: number,
+): number[] =>
+  Array.from({ length: config.dotCount }, (_, i) => {
+    const r = rotateY(sphereBase[i]!, layoutAngle);
+    const depthVisible = (r.z + 1) / 2;
+    const u = (i / config.dotCount + 0.5) % 1;
     const w = 0.5 + 0.5 * Math.sin(2 * Math.PI * u + opacityAngle);
-    return (
-      THINKING_OPACITY_MIN + (THINKING_OPACITY_MAX - THINKING_OPACITY_MIN) * w
-    );
+    const wave =
+      THINKING_OPACITY_MIN + (THINKING_OPACITY_MAX - THINKING_OPACITY_MIN) * w;
+    return clamp(wave * depthVisible, 0, 1);
   });
 
 const LOADING_PAUSE = 2;
@@ -297,7 +307,7 @@ const loadingLayout = (
 const loadingOpacities = (
   config: GridConfig,
   dotRank: number[],
-  angle = 0,
+  angle: number,
 ): number[] => {
   const cycle = config.dotCount + LOADING_PAUSE;
   const trailSteps = config.dotCount - 1;
@@ -328,7 +338,8 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     thinking: {
       label: "Thinking",
       layout: (angle = 0) => thinkingLayout(config, sphereBase, angle),
-      opacities: (angle = 0) => thinkingOpacities(config.dotCount, angle),
+      opacities: (ctx) =>
+        thinkingOpacities(config, sphereBase, ctx.layoutAngle, ctx.opacityAngle),
       animated: true,
       layoutSpeed: 3,
       opacitySpeed: 4,
@@ -336,7 +347,7 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     loading: {
       label: "Loading",
       layout: (angle = 0) => loadingLayout(config, dotRank, angle),
-      opacities: (angle = 0) => loadingOpacities(config, dotRank, angle),
+      opacities: (ctx) => loadingOpacities(config, dotRank, ctx.opacityAngle),
       animated: true,
       layoutSpeed: 12,
     },
@@ -473,7 +484,10 @@ const DotIcon = ({
     gridRef.current = grid;
     const def = states[state];
     const proj = def.layout(0).map((v) => project(v, config));
-    const opa = resolveOpacities(def.opacities, 0);
+    const opa = resolveOpacities(def.opacities, {
+      layoutAngle: 0,
+      opacityAngle: 0,
+    });
     targetsRef.current = proj.map((p, i) => ({
       cx: motionValue(p.sx),
       cy: motionValue(p.sy),
@@ -509,7 +523,10 @@ const DotIcon = ({
       : 0;
 
     const proj = def.layout(layoutAngle).map((v) => project(v, cfg));
-    const opa = resolveOpacities(def.opacities, opacityAngle);
+    const opa = resolveOpacities(def.opacities, {
+      layoutAngle,
+      opacityAngle,
+    });
 
     const tr = opacityTransitionRef.current;
     const inOpacityTransition = tr?.state === key;

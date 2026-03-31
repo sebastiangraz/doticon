@@ -16,7 +16,7 @@ const GRID_SLIDER_MAX = 13;
 export const Route = createFileRoute("/")({
   component: () => {
     const [icon3dState, setIcon3dState] = useState<StateKey>("dormant");
-    const [gridSize, setGridSize] = useState(GRID_SLIDER_MIN);
+    const [gridSize, setGridSize] = useState(4);
 
     return (
       <>
