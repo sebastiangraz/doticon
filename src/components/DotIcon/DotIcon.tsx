@@ -101,8 +101,44 @@ const DORMANT_MASTER: readonly number[] = [
   1, 1, 1, 0.12, 1, 1, 0.12,
 ];
 
+// ─── Dormant 4×4 overrides ────────────────────────────────────────────────────
+// Full designer control over opacities and Z (dot size) at 4×4.
+// Opacities: 0.12 = dim, 0.45 = half, 1 = full.
+// Z: integer in 0–3 — 0 = back/smallest dot, 3 = front/largest dot.
+//
+// (D = dim, █ = full, ▒ = half)
+//   D █ █ █
+//   █ ▒ █ █
+//   █ █ ▒ █
+//   █ █ █ D
+
+const DORMANT_4x4_OPACITIES: readonly number[] = [
+  // row 0
+  0.12, 1, 0.12, 1,
+  // row 1
+  1, 0.45, 1, 0.12,
+  // row 2
+  0.12, 1, 0.45, 1,
+  // row 3
+  1, 0.12, 1, 0.12,
+];
+
+// Z per dot in 0–3 order; edit to give individual dots more or less visual weight.
+const DORMANT_4x4_Z: readonly number[] = [
+  // row 0
+  2, 2, 2, 2,
+  // row 1
+  2, 3, 2, 2,
+  // row 2
+  2, 2, 3, 2,
+  // row 3
+  2, 2, 2, 2,
+];
+
 // Nearest-neighbour downsample from the 7×7 master to any n×n grid.
+// Per-size overrides take priority and bypass the downsampler entirely.
 const buildDormantOpacities = (n: number): number[] => {
+  if (n === 4) return [...DORMANT_4x4_OPACITIES];
   if (n === DORMANT_MASTER_N) return [...DORMANT_MASTER];
   const span = DORMANT_MASTER_N - 1; // 6
   return Array.from({ length: n * n }, (_, idx) => {
@@ -166,14 +202,17 @@ const resolveOpacities = (o: Opacities, angle = 0): number[] =>
 
 // ─── Layout / opacity functions ───────────────────────────────────────────────
 
-// All dormant dots sit at a consistent near-front Z — the logo reads through
-// opacity alone, size variation would compete with the pattern.
-const dormantLayout = (config: GridConfig): Vec3[] =>
-  Array.from({ length: config.dotCount }, (_, i) => ({
+// Dormant dots sit at a consistent near-front Z by default.
+// The 4×4 override uses DORMANT_4x4_Z for per-dot size control.
+const dormantLayout = (config: GridConfig): Vec3[] => {
+  const useOverride = config.n === 4;
+  const defaultZ = Math.max(config.grid.min, config.grid.max - 1);
+  return Array.from({ length: config.dotCount }, (_, i) => ({
     x: i % config.n,
     y: Math.floor(i / config.n),
-    z: Math.max(config.grid.min, config.grid.max - 1),
+    z: useOverride ? DORMANT_4x4_Z[i] : defaultZ,
   }));
+};
 
 const thinkingLayout = (
   config: GridConfig,
