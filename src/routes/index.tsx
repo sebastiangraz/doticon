@@ -85,7 +85,7 @@ export const Route = createFileRoute("/")({
               <DotIcon size={32} state={"dormant"} />
               <DotIcon size={32} state={"dormant"} grid={3} />
               <DotIcon size={32} state={"dormant"} grid={5} />
-              <DotIcon size={48} state={"dormant"} grid={7} />
+              <DotIcon size={100} state={"dormant"} grid={7} />
               <DotIcon size={16} state={"dormant"} />
             </ExposeProps>
             <ExposeProps className={styles.prop}>

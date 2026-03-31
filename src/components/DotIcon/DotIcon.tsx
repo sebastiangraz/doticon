@@ -15,21 +15,22 @@ type Vec3 = { x: number; y: number; z: number };
 
 // ─── GRID CONFIG ─────────────────────────────────────────────────────────────
 
+// Fixed size chart — back → front. Independent of grid size so dots look the
+// same regardless of how many columns the grid has. Editable for tuning.
+const DOT_SIZES = [6, 8, 10, 12] as const;
+
 // Pure coordinate-system description. Contains no state-specific data —
 // adding or removing a state never requires changing this type.
 type GridConfig = {
   n: number;
   dotCount: number;
   grid: { min: 0; max: number; center: number };
-  dotSizes: readonly number[];
 };
 
 const buildGridConfig = (n: number): GridConfig => {
   const dotCount = n * n;
   const grid = { min: 0 as const, max: n - 1, center: (n - 1) / 2 };
-  // One size bucket per Z level, stepping up by 2px per level
-  const dotSizes = Array.from({ length: n }, (_, i) => 6 + i * 2);
-  return { n, dotCount, grid, dotSizes };
+  return { n, dotCount, grid };
 };
 
 // ─── 3D math ─────────────────────────────────────────────────────────────────
@@ -47,10 +48,9 @@ const SVG_PAD = 14;
 const SVG_SPAN = VIEW_SIZE - 2 * SVG_PAD;
 
 const snapSize = (z: number, config: GridConfig): number => {
-  const { grid, dotSizes } = config;
-  const t = (z - grid.min) / (grid.max - grid.min);
-  const idx = Math.round(Math.max(0, Math.min(1, t)) * (dotSizes.length - 1));
-  return dotSizes[idx];
+  const t = (z - config.grid.min) / (config.grid.max - config.grid.min);
+  const idx = Math.round(Math.max(0, Math.min(1, t)) * (DOT_SIZES.length - 1));
+  return DOT_SIZES[idx];
 };
 
 type Projected = { sx: number; sy: number; size: number; z: number };
