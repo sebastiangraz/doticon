@@ -1,10 +1,8 @@
-import { useRef, useEffect, useCallback, useMemo } from "react";
+import { useRef, useEffect } from "react";
 import type { CSSProperties } from "react";
 import {
   motion,
-  animate,
   motionValue,
-  transformValue,
   useTime,
   useSpring,
   useMotionValueEvent,
@@ -203,16 +201,6 @@ const SPRING = {
   damping: 18,
   mass: 0.8,
 };
-const STAGGER = 0.035;
-
-// Blend-in for animated states should “grab” the rotating target quickly
-// (similar to the old in-rAF `stepBlend` feel), without relying on overshoot.
-const BLEND_SPRING = {
-  type: "spring" as const,
-  stiffness: 100,
-  damping: 24,
-  mass: 1,
-};
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -223,39 +211,42 @@ type DotMV = {
   opacity: MotionValue<number>;
 };
 
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
 const DotCircle = ({ mv }: { mv: DotMV }) => {
-  // Keep a stable spring across state switches and have it follow whatever
-  // `mv.r` currently is. This prevents “pops” when swapping between static/derived
-  // MotionValues and avoids remounting dots.
-  const r = useSpring(mv.r.get(), { stiffness: 100, damping: 18, mass: 0.8 });
+  const cx = useSpring(mv.cx.get(), SPRING);
+  const cy = useSpring(mv.cy.get(), SPRING);
+  const r = useSpring(mv.r.get(), SPRING);
+  const opacity = useSpring(mv.opacity.get(), SPRING);
 
-  useMotionValueEvent(mv.r, "change", (latest) => {
-    r.set(latest);
-  });
+  useMotionValueEvent(mv.cx, "change", (latest) => cx.set(latest));
+  useMotionValueEvent(mv.cy, "change", (latest) => cy.set(latest));
+  useMotionValueEvent(mv.r, "change", (latest) => r.set(latest));
+  useMotionValueEvent(mv.opacity, "change", (latest) => opacity.set(latest));
 
-  // When the underlying MotionValue instance changes (state switch),
-  // nudge the spring’s target to the new source’s current value.
+  // When the underlying MotionValue instances change (state switch),
+  // nudge spring targets so rapid switching feels like “following” rather than
+  // restarting queued animations.
   useEffect(() => {
+    cx.set(mv.cx.get());
+    cy.set(mv.cy.get());
     r.set(mv.r.get());
-  }, [mv.r, r]);
+    opacity.set(mv.opacity.get());
+  }, [mv.cx, mv.cy, mv.r, mv.opacity, cx, cy, r, opacity]);
 
   return (
     <motion.circle
-      cx={mv.cx}
-      cy={mv.cy}
+      cx={cx}
+      cy={cy}
       r={r}
       fill="currentColor"
-      fillOpacity={mv.opacity}
+      fillOpacity={opacity}
     />
   );
 };
 
-type Snapshot = { sx: number; sy: number; r: number; opacity: number };
-
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp = (v: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v));
-const clamp01 = (v: number) => clamp(v, 0, 1);
 
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 
@@ -272,184 +263,56 @@ const DotIcon = ({
 }) => {
   const time = useTime();
   const phaseStartMsRef = useRef(0);
-  const prevStateRef = useRef<StateKey>(state);
+  const stateRef = useRef<StateKey>(state);
+  stateRef.current = state;
 
   const defRef = useRef<StateDef>(STATES[state]);
   defRef.current = STATES[state];
 
-  const mvsRef = useRef<DotMV[] | null>(null);
-  if (!mvsRef.current) {
+  // Target MotionValues that update with Motion’s time driver.
+  // DotCircle springs follow these targets, giving smooth rapid-fire switching.
+  const targetsRef = useRef<DotMV[] | null>(null);
+  if (!targetsRef.current) {
     const def = STATES[state];
     const proj = def.layout(0).map(project);
     const opa = resolveOpacities(def.opacities, 0);
-    mvsRef.current = proj.map((p, i) => ({
+    targetsRef.current = proj.map((p, i) => ({
       cx: motionValue(p.sx),
       cy: motionValue(p.sy),
       r: motionValue(p.size / 2),
       opacity: motionValue(opa[i]),
     }));
   }
-  const mvs = mvsRef.current;
-
-  const ctrlsRef = useRef<{ stop: () => void }[]>([]);
-
-  const stopAnims = useCallback(() => {
-    ctrlsRef.current.forEach((c) => c.stop());
-    ctrlsRef.current = [];
-  }, []);
-
-  const sourcesRef = useRef<Snapshot[] | null>(null);
-  const blendsRef = useRef<MotionValue<number>[] | null>(null);
-  if (!blendsRef.current) {
-    blendsRef.current = Array.from({ length: DOT_COUNT }, () => motionValue(1));
-  }
-  const blends = blendsRef.current;
-
-  const morphTo = useCallback(
-    (targets: Projected[], opacities: number[]) => {
-      stopAnims();
-      mvs.forEach((mv, i) => {
-        const cfg = { ...SPRING, delay: i * STAGGER };
-        ctrlsRef.current.push(animate(mv.cx, targets[i].sx, cfg));
-        ctrlsRef.current.push(animate(mv.cy, targets[i].sy, cfg));
-        ctrlsRef.current.push(animate(mv.r, targets[i].size / 2, cfg));
-        ctrlsRef.current.push(animate(mv.opacity, opacities[i], cfg));
-      });
-    },
-    [mvs, stopAnims],
-  );
-
-  const phaseTime = useMemo(
-    () => transformValue(() => time.get() - phaseStartMsRef.current),
-    [time],
-  );
-
-  const layoutAngle = useMemo(
-    () =>
-      transformValue(() => {
-        const def = defRef.current;
-        const t = phaseTime.get() / 1000;
-        return (def.layoutSpeed ?? 0) * t;
-      }),
-    [phaseTime],
-  );
-
-  const opacityAngle = useMemo(
-    () =>
-      transformValue(() => {
-        const def = defRef.current;
-        const t = phaseTime.get() / 1000;
-        const layoutSpeed = def.layoutSpeed ?? 0;
-        const opacitySpeed = def.opacitySpeed ?? layoutSpeed;
-        return opacitySpeed * t;
-      }),
-    [phaseTime],
-  );
-
-  const targets = useMemo(
-    () =>
-      transformValue(() => {
-        const def = defRef.current;
-        return def.layout(layoutAngle.get()).map(project);
-      }),
-    [layoutAngle],
-  );
-
-  const targetOpacities = useMemo(
-    () =>
-      transformValue(() => {
-        const def = defRef.current;
-        return resolveOpacities(def.opacities, opacityAngle.get());
-      }),
-    [opacityAngle],
-  );
-
-  const animatedMvs = useMemo<DotMV[]>(
-    () =>
-      Array.from({ length: DOT_COUNT }, (_, i) => ({
-        cx: transformValue(() => {
-          const src = sourcesRef.current?.[i];
-          const t = targets.get()[i];
-          const b = clamp01(blends[i].get());
-          return src ? lerp(src.sx, t.sx, b) : t.sx;
-        }),
-        cy: transformValue(() => {
-          const src = sourcesRef.current?.[i];
-          const t = targets.get()[i];
-          const b = clamp01(blends[i].get());
-          return src ? lerp(src.sy, t.sy, b) : t.sy;
-        }),
-        r: transformValue(() => {
-          const src = sourcesRef.current?.[i];
-          const t = targets.get()[i];
-          const b = clamp01(blends[i].get());
-          const tr = t.size / 2;
-          const mixed = src ? lerp(src.r, tr, b) : tr;
-          return Math.max(0, mixed);
-        }),
-        opacity: transformValue(() => {
-          const src = sourcesRef.current?.[i];
-          const to = targetOpacities.get()[i];
-          const b = clamp01(blends[i].get());
-          const mixed = src ? lerp(src.opacity, to, b) : to;
-          return clamp01(mixed);
-        }),
-      })),
-    [blends, targets, targetOpacities],
-  );
+  const targetMvs = targetsRef.current;
 
   // ─── State transitions ────────────────────────────────────────────────────
 
   useEffect(() => {
-    const def = STATES[state];
-    const prevState = prevStateRef.current;
-    prevStateRef.current = state;
-
-    stopAnims();
     phaseStartMsRef.current = time.get();
+  }, [state, time]);
 
-    if (def.animated) {
-      const prevMvs = STATES[prevState].animated ? animatedMvs : mvs;
-      sourcesRef.current = prevMvs.map((mv) => ({
-        sx: mv.cx.get(),
-        sy: mv.cy.get(),
-        r: mv.r.get(),
-        opacity: mv.opacity.get(),
-      }));
+  useMotionValueEvent(time, "change", (ms) => {
+    const key = stateRef.current;
+    const def = STATES[key];
+    const t = (ms - phaseStartMsRef.current) / 1000;
 
-      blends.forEach((b) => b.set(0));
-      blends.forEach((b, i) => {
-        const cfg = { ...BLEND_SPRING, delay: i * STAGGER };
-        ctrlsRef.current.push(animate(b, 1, cfg));
-      });
-    } else {
-      const prevMvs = STATES[prevState].animated ? animatedMvs : mvs;
-      // Ensure the static MotionValues start from the currently-rendered pose,
-      // otherwise we’d animate from stale `mvs` values after being in an animated state.
-      for (let i = 0; i < DOT_COUNT; i++) {
-        // Use `jump()` to reset velocity, otherwise the spring can inherit a huge
-        // implicit velocity from this cross-state handoff and overshoot (“explode”).
-        mvs[i].cx.jump(prevMvs[i].cx.get());
-        mvs[i].cy.jump(prevMvs[i].cy.get());
-        mvs[i].r.jump(prevMvs[i].r.get());
-        mvs[i].opacity.jump(prevMvs[i].opacity.get());
-      }
+    const layoutAngle = def.animated ? (def.layoutSpeed ?? 0) * t : 0;
+    const opacityAngle = def.animated
+      ? (def.opacitySpeed ?? def.layoutSpeed ?? 0) * t
+      : 0;
 
-      sourcesRef.current = null;
-      blends.forEach((b) => b.set(1));
-      const proj = def.layout(0).map(project);
-      const opa = resolveOpacities(def.opacities, 0);
-      morphTo(proj, opa);
+    const proj = def.layout(layoutAngle).map(project);
+    const opa = resolveOpacities(def.opacities, opacityAngle);
+
+    for (let i = 0; i < DOT_COUNT; i++) {
+      targetMvs[i].cx.set(proj[i].sx);
+      targetMvs[i].cy.set(proj[i].sy);
+      targetMvs[i].r.set(Math.max(0, proj[i].size / 2));
+      targetMvs[i].opacity.set(clamp(opa[i], 0, 1));
     }
-
-    return () => {
-      stopAnims();
-    };
-  }, [state, morphTo, stopAnims, mvs, time, blends, animatedMvs]);
+  });
 
   // ─── Render ────────────────────────────────────────────────────────────────
-
-  const renderMvs = STATES[state].animated ? animatedMvs : mvs;
 
   return (
     <div
@@ -467,7 +330,7 @@ const DotIcon = ({
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: "visible" }}
       >
-        {renderMvs.map((mv, i) => (
+        {targetMvs.map((mv, i) => (
           <DotCircle key={i} mv={mv} />
         ))}
       </svg>
