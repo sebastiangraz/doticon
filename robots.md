@@ -1,50 +1,60 @@
-## DotIcon — a state-machine icon built on a native 3D coordinate system, rendered as SVG.
+## DotIcon — a state-machine icon built on a dynamic 3D coordinate system, rendered as SVG.
 
 ## Core concept:
 
-Dot grid (defaulting to 16 dots) treated as vertices in a full cartesian coordinate space (`Vec3`). All three axes share the same integer coordinate space defined by `GRID` (see source), centered on `GRID.center`. Dots are uniform in the backend — size is derived purely from Z-depth at render time via orthographic projection. Uses `fill="currentColor"` so color is controlled externally.
+An N×N dot grid (controlled by the `grid` prop, default 4) treated as vertices in a cartesian coordinate space (`Vec3`). `buildGridConfig(n)` produces a `GridConfig` containing `n`, `dotCount` (n²), and `grid: { min: 0, max: n-1, center: (n-1)/2 }`. `GridConfig` is a pure coordinate-system description — it carries no state-specific data. Adding or removing a state never requires changing it. Dots use `fill="currentColor"` so color is controlled externally.
 
 ## 3D engine:
 
-Orthographic projection — drops Z, maps X/Y linearly into the SVG viewBox sized by `VIEW_SIZE` with horizontal/vertical padding `SVG_SPAN` derived from `SVG_PAD`. No perspective division; if all vertices of a full 3D volume were populated, the viewer would only see the frontmost layer in XY. Coordinates accept decimals for smooth morphing between layouts.
+Orthographic projection — drops Z, maps X/Y linearly into the SVG viewBox sized by `VIEW_SIZE` (100) with padding `SVG_PAD` (14). `SVG_SPAN = VIEW_SIZE - 2 * SVG_PAD`. No perspective division. Coordinates accept decimals for smooth morphing between layouts.
 
-Z → dot size: Z maps into the discrete `DOT_SIZES` chart via `snapSize()`. Dot radius uses `snapSize(z) / 2` and is then smoothed at render time by per-dot Motion springs (so bucket changes ease instead of “popping”). The chart is a const for tuning.
+Z → dot size: `DOT_SIZES = [6, 8, 12, 16]` (back → front, independent of grid size). `snapSize(z, config)` maps a Z coordinate into this chart by normalising Z over the grid range and rounding to the nearest size index. Dot radius = `snapSize(z) / 2`, then smoothed at render time by per-dot Motion springs.
 
-Paint order: there’s currently **no depth-based paint ordering** (no Z-sort). SVG circles render in stable index order. If Z sorting is desired, it can be added by sorting render order based on projected `z` each frame.
+**`gridBaseZ(config)`** — inverse grid-density sizing. Smaller grids → higher Z (larger dots), larger grids → lower Z (smaller dots). `step = n <= 3 ? 0 : n - 4`, then back-solves to the Z value that `snapSize` will round to the correct `DOT_SIZES` index. This keeps dots visually proportional regardless of grid resolution.
 
-3D math: `rotateY` is the primary rotation (more axes are straightforward to add). Uses standard cos/sin matrix multiplication.
+Paint order: no depth-based paint ordering (no Z-sort). SVG circles render in stable index order.
+
+3D math: `rotateY` is the primary rotation — standard cos/sin matrix multiplication.
 
 ## State system:
 
-Each entry in `STATES` has: `label`, `layout(angle?)`, `opacities`, `animated`, optional `layoutSpeed`, optional `opacitySpeed`.
+`buildStates(config)` returns `Record<StateKey, StateDef>`, rebuilt whenever `GridConfig` changes. State-specific precomputed data (sphere points, loading order, dormant opacities) is closed over inside `buildStates` — private to each state, invisible to `GridConfig`.
 
-Layout functions return `Vec3[]` — pure 3D positions, no SVG or size info. Projection and size snapping happen at render time. Opacities are per-state: either a static `number[]` or a function `(angle?) → number[]` for animated opacity patterns. `resolveOpacities()` normalizes both forms.
+`StateDef` has: `label`, `layout(angle?) → Vec3[]`, `opacities: number[] | ((ctx: OpacitySolveCtx) => number[])`, `animated`, optional `layoutSpeed` (rad/s for 3D spin), optional `opacitySpeed` (rad/s for opacity phase; defaults to `layoutSpeed` when omitted).
 
-Three states exist; more can be added by registering one `STATES` entry plus a layout + opacity definition:
+`OpacitySolveCtx = { layoutAngle, opacityAngle }` — two independent phase angles passed to functional opacities. `resolveOpacities()` normalises both static arrays and functions.
 
-**Dormant** — static 4×4 grid on Z≈0. The inner 2×2 block uses a higher Z than the outer ring (see `INNER` and `dormantLayout` in source), which drives size via `snapSize` and gives a depth hierarchy. Uses `DEFAULT_OPACITIES`.
+Three states exist (`StateKey = "dormant" | "thinking" | "loading"`); more can be added by registering one entry in `buildStates` plus layout/opacity definitions:
 
-**Thinking** — Fibonacci sphere (`SPHERE_BASE`) scaled and centered using `GRID.center` for all three axes. While active, `layoutAngle` and `opacityAngle` advance with Motion time using `layoutSpeed` and `opacitySpeed`. Z-depth controls dot size (via `snapSize`) and thus dot radius.
+**Dormant** — static logotype pattern. A 7×7 master grid (`DORMANT_MASTER`) encodes dim (0.12), half (0.45), and full (1) opacities in a diagonal motif. Any grid size other than 7 is derived via nearest-neighbour downsampling from this master (`buildDormantOpacities`). The 4×4 size has a full hand-crafted override: `DORMANT_4x4_OPACITIES` for per-dot opacity and `DORMANT_4x4_Z` for per-dot Z (dot-size control). All other sizes place every dot at `gridBaseZ(config)`. Not animated.
 
-**Loading** — 4×4 grid “fill” animation with a trailing fade. While active, the layout/opacity phase advances with Motion time using `layoutSpeed`.
+**Thinking** — Fibonacci sphere. `buildSphereBase(config)` distributes `dotCount` points on a unit sphere. While active, the sphere is rotated by `layoutAngle` via `rotateY`. Z is mapped onto `[0, baseZ]` with `baseZ * (0.5 + 0.5 * r.z)` so front dots match the grid's target size and size variation scales down with grid density. Opacities combine a sine wave along the spiral index (phased by `opacityAngle`) with a back-face depth fade from `rotateY(sphereBase[i], layoutAngle).z`. `layoutSpeed = 3`, `opacitySpeed = 4`.
+
+**Loading** — column-major fill animation. `buildLoadingOrder(config)` produces a fill sequence (x 0→n-1, y n-1→0) and an inverse rank map. Fill front sits at `baseZ`; the trail falls to `max(grid.min, baseZ - 2)` over `dotCount - 1` steps. `LOADING_PAUSE = 2` adds dead ticks per cycle. Opacity: 1 at fill, fading to 0.12 along the trail; unfilled dots fixed at 0.12. `layoutSpeed = 12`.
 
 ## Animation architecture:
 
-Motion-only “follow springs” model (no `requestAnimationFrame` loop):
+Motion-only "follow springs" model (no `requestAnimationFrame` loop):
 
-- A stable set of per-dot target `MotionValue`s (`cx`, `cy`, `r`, `opacity`) is updated on Motion’s internal frame loop using `useTime()` + `useMotionValueEvent(time, "change", ...)`.
-- Each rendered dot uses `useSpring` for `cx`, `cy`, `r`, and `opacity`, and simply follows the continuously-updated targets.
-- Result: rapid state switching feels like a spring chasing a moving target (no queued transitions to “finish”), while still producing smooth morphs between states.
+- A stable set of per-dot target `MotionValue`s (`cx`, `cy`, `r`, `opacity`) is updated on Motion's internal frame loop using `useTime()` + `useMotionValueEvent(time, "change", ...)`.
+- Each rendered `DotCircle` uses `useSpring` for `cx`, `cy`, `r`, and `opacity`, and simply follows the continuously-updated targets.
+- Result: rapid state switching feels like a spring chasing a moving target (no queued transitions to "finish"), while still producing smooth morphs between states.
 
-Stagger in this model is achieved by varying spring response per dot (later dots are slightly heavier/softer), creating a cascade without explicit delays.
+Stagger: per-dot spring variation (later dots are slightly heavier/softer) creates a spatial cascade without explicit delays.
+
+**Opacity crossfade on state change**: `OPACITY_STAGGER_MS = 12`, `OPACITY_CROSSFADE_MS = 160`. When state changes, a per-dot staggered linear blend runs from the old opacity snapshot to the new state's target opacity. This prevents abrupt opacity jumps. Once the last dot finishes blending, the crossfade math is disabled and the handler falls back to direct assignment.
+
+**Grid changes**: when the `grid` prop changes, the target `MotionValue` array is rebuilt from scratch (dot count changes — no continuity is possible). The opacity transition ref is also reset.
 
 ## Props:
 
-`size` (px, default in component), `state` (`StateKey`, default `"dormant"`), `grid` (optional integer N for an N×N dot lattice, default `4`), `color`, `style`.
+`size` (px, default 200), `state` (`StateKey`, default `"dormant"`), `grid` (integer N for N×N, default 4), `color`, `style`.
 
-State is controlled externally via the `state` prop. `StateKey`, `STATE_KEYS`, and `getStateLabel` are exported for parent components.
+Exports: `StateKey`, `STATE_KEYS`, `getStateLabel`.
 
-On the index route demo, grid size is adjustable with a range slider (2–13) beside the state toggle buttons.
+## Demo page (index route):
+
+Grid slider (range 2–13), state toggle buttons, and an `ExposeProps` gallery showing multiple grid sizes (3–7) at each state.
 
 ## Dependencies:
 
