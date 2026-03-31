@@ -197,8 +197,8 @@ export const getStateLabel = (key: StateKey): string => STATES[key].label;
 
 const SPRING = {
   type: "spring" as const,
-  stiffness: 100,
-  damping: 18,
+  stiffness: 240,
+  damping: 24,
   mass: 0.8,
 };
 
@@ -221,7 +221,7 @@ const DotCircle = ({ mv, i }: { mv: DotMV; i: number }) => {
   const spring = {
     ...SPRING,
     stiffness: SPRING.stiffness * (1 - 0.35 * t),
-    damping: SPRING.damping * (1 + 0.15 * t),
+    damping: SPRING.damping * (1 + 0.24 * t),
     mass: SPRING.mass * (1 + 0.6 * t),
   } as const;
 
