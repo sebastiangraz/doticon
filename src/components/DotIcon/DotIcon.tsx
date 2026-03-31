@@ -214,9 +214,8 @@ type DotMV = {
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 const DotCircle = ({ mv, i }: { mv: DotMV; i: number }) => {
-  // “Stagger” in the follow-spring model:
-  // later dots are slightly heavier/softer, so they lag behind and create a cascade
-  // without introducing explicit delays/queued transitions.
+  // Per-dot spring variation gives a mild spatial cascade without explicit delays.
+  // Opacity staggering is handled separately during state transitions.
   const t = DOT_COUNT <= 1 ? 0 : i / (DOT_COUNT - 1);
   const spring = {
     ...SPRING,
@@ -228,7 +227,7 @@ const DotCircle = ({ mv, i }: { mv: DotMV; i: number }) => {
   const cx = useSpring(mv.cx.get(), spring);
   const cy = useSpring(mv.cy.get(), spring);
   const r = useSpring(mv.r.get(), spring);
-  const opacity = useSpring(mv.opacity.get(), spring);
+  const opacity = useSpring(mv.opacity.get(), SPRING);
 
   useMotionValueEvent(mv.cx, "change", (latest) => cx.set(latest));
   useMotionValueEvent(mv.cy, "change", (latest) => cy.set(latest));
@@ -259,6 +258,10 @@ const DotCircle = ({ mv, i }: { mv: DotMV; i: number }) => {
 const clamp = (v: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v));
 
+// Opacity-only stagger for state changes (no spatial sequencing).
+const OPACITY_STAGGER_MS = 12;
+const OPACITY_CROSSFADE_MS = 160;
+
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 
 const DotIcon = ({
@@ -280,6 +283,12 @@ const DotIcon = ({
   const defRef = useRef<StateDef>(STATES[state]);
   defRef.current = STATES[state];
 
+  const opacityTransitionRef = useRef<{
+    state: StateKey;
+    startMs: number;
+    from: number[];
+  } | null>(null);
+
   // Target MotionValues that update with Motion’s time driver.
   // DotCircle springs follow these targets, giving smooth rapid-fire switching.
   const targetsRef = useRef<DotMV[] | null>(null);
@@ -300,6 +309,14 @@ const DotIcon = ({
 
   useEffect(() => {
     phaseStartMsRef.current = time.get();
+
+    // Capture current opacities so we can crossfade into the new state's opacity
+    // pattern with a true stagger (delay), while leaving cx/cy/r immediate.
+    opacityTransitionRef.current = {
+      state,
+      startMs: time.get(),
+      from: targetMvs.map((mv) => mv.opacity.get()),
+    };
   }, [state, time]);
 
   useMotionValueEvent(time, "change", (ms) => {
@@ -315,11 +332,37 @@ const DotIcon = ({
     const proj = def.layout(layoutAngle).map(project);
     const opa = resolveOpacities(def.opacities, opacityAngle);
 
+    const tr = opacityTransitionRef.current;
+    const inOpacityTransition = tr?.state === key;
+    const transitionElapsedMs = inOpacityTransition ? ms - tr.startMs : 0;
+
     for (let i = 0; i < DOT_COUNT; i++) {
       targetMvs[i].cx.set(proj[i].sx);
       targetMvs[i].cy.set(proj[i].sy);
       targetMvs[i].r.set(Math.max(0, proj[i].size / 2));
-      targetMvs[i].opacity.set(clamp(opa[i], 0, 1));
+
+      const targetOpacity = clamp(opa[i], 0, 1);
+      if (!inOpacityTransition) {
+        targetMvs[i].opacity.set(targetOpacity);
+        continue;
+      }
+
+      const localMs = transitionElapsedMs - i * OPACITY_STAGGER_MS;
+      const blendT = clamp(localMs / OPACITY_CROSSFADE_MS, 0, 1);
+      if (blendT >= 1) {
+        targetMvs[i].opacity.set(targetOpacity);
+        continue;
+      }
+
+      const from = clamp(tr.from[i] ?? targetOpacity, 0, 1);
+      targetMvs[i].opacity.set(lerp(from, targetOpacity, blendT));
+    }
+
+    // Once the last dot has fully blended, stop doing special-case math.
+    if (inOpacityTransition) {
+      const doneAtMs =
+        (DOT_COUNT - 1) * OPACITY_STAGGER_MS + OPACITY_CROSSFADE_MS;
+      if (transitionElapsedMs >= doneAtMs) opacityTransitionRef.current = null;
     }
   });
 
