@@ -6,6 +6,7 @@ import DotIcon, {
   STATE_KEYS,
   type StateKey,
 } from "#/components/DotIcon/DotIcon";
+import { Shader } from "#/components/Shader/Shader";
 import styles from "../index.module.css";
 
 const mono = "'SF Mono', 'Fira Code', 'JetBrains Mono', monospace" as const;
@@ -158,6 +159,7 @@ export const Route = createFileRoute("/")({
             </ExposeProps>
           </div>
         </div>
+        <Shader color={"#f00"} color2={"#00f"} />
       </>
     );
   },

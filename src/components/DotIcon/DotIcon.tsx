@@ -1,10 +1,6 @@
 import { useRef, useEffect, useMemo } from "react";
 import type { CSSProperties } from "react";
-import {
-  motionValue,
-  useTime,
-  useMotionValueEvent,
-} from "motion/react";
+import { motionValue, useTime, useMotionValueEvent } from "motion/react";
 import { DotCircle, type DotMV } from "./DotCircle";
 
 // ─── 3D ENGINE ───────────────────────────────────────────────────────────────
@@ -337,7 +333,12 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       label: "Thinking",
       layout: (angle = 0) => thinkingLayout(config, sphereBase, angle),
       opacities: (ctx) =>
-        thinkingOpacities(config, sphereBase, ctx.layoutAngle, ctx.opacityAngle),
+        thinkingOpacities(
+          config,
+          sphereBase,
+          ctx.layoutAngle,
+          ctx.opacityAngle,
+        ),
       animated: true,
       layoutSpeed: 3,
       opacitySpeed: 4,

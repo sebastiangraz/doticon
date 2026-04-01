@@ -1,0 +1,17 @@
+.canvas {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  overflow: clip;
+  height: 60vh;
+  opacity: 1;
+  transition: opacity 0.35s ease-out;
+}
+
+.resizeHidden {
+  opacity: 0;
+  transition: none;
+}
