@@ -58,8 +58,8 @@ export const Route = createFileRoute("/")({
               <input
                 id="doticon-grid-size"
                 type="range"
-                min={3}
-                max={5}
+                min={2}
+                max={7}
                 value={gridSize}
                 onChange={(e) =>
                   setGridSize(Number.parseInt(e.target.value, 10))

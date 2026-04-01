@@ -187,7 +187,7 @@ const buildLoadingOrder = (
 
 // ─── STATE SYSTEM ────────────────────────────────────────────────────────────
 
-export type StateKey = "dormant" | "thinking" | "loading";
+export type StateKey = "dormant" | "thinking" | "loading" | "dev";
 
 type OpacitySolveCtx = { layoutAngle: number; opacityAngle: number };
 
@@ -233,6 +233,16 @@ const dormantLayout = (config: GridConfig): Vec3[] => {
     x: i % config.n,
     y: Math.floor(i / config.n),
     z: config.n === 4 ? DORMANT_4x4_Z[i] : baseZ,
+  }));
+};
+
+// Dev: plain grid with uniform baseZ, no special opacity/layout logic.
+const devLayout = (config: GridConfig): Vec3[] => {
+  const baseZ = gridBaseZ(config);
+  return Array.from({ length: config.dotCount }, (_, i) => ({
+    x: i % config.n,
+    y: Math.floor(i / config.n),
+    z: baseZ,
   }));
 };
 
@@ -333,6 +343,12 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const { dotRank } = buildLoadingOrder(config);
 
   return {
+    dev: {
+      label: "Dev",
+      layout: () => devLayout(config),
+      opacities: Array.from({ length: config.dotCount }, () => 1),
+      animated: false,
+    },
     dormant: {
       label: "Dormant",
       layout: () => dormantLayout(config),
@@ -363,12 +379,13 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   };
 };
 
-export const STATE_KEYS: StateKey[] = ["dormant", "thinking", "loading"];
+export const STATE_KEYS: StateKey[] = ["dormant", "thinking", "loading", "dev"];
 
 const STATE_LABELS: Record<StateKey, string> = {
   dormant: "Dormant",
   thinking: "Thinking",
   loading: "Loading",
+  dev: "Dev",
 };
 
 export const getStateLabel = (key: StateKey): string => STATE_LABELS[key];
