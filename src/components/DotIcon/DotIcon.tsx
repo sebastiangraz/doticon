@@ -295,7 +295,7 @@ const thinkingOpacities = (
     return clamp(wave * depthVisible, 0, 1);
   });
 
-const LOADING_PAUSE = 2;
+const LOADING_PAUSE = 4;
 const LOADING_FILLED_OPACITY_MIN = 0.12;
 
 const loadingTimeSinceFill = (
@@ -313,7 +313,7 @@ const loadingLayout = (
   dotRank: number[],
   angle = 0,
 ): Vec3[] => {
-  const baseZ = gridBaseZ(config);
+  const baseZ = gridBaseZ(config) + 0.5;
   const trailZ = Math.max(config.grid.min, baseZ - 2);
   const cycle = config.dotCount + LOADING_PAUSE;
   const trailSteps = config.dotCount - 1;
