@@ -1,41 +1,37 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import type { CSSProperties } from "react";
-import { motion, animate, motionValue, type MotionValue } from "motion/react";
+import {
+  motion,
+  motionValue,
+  useTime,
+  useSpring,
+  useMotionValueEvent,
+  type MotionValue,
+} from "motion/react";
 
 // ─── 3D ENGINE ───────────────────────────────────────────────────────────────
 
 type Vec3 = { x: number; y: number; z: number };
 
-// Grid lives at integer coords 0–3 on all axes; center at 1.5,1.5,1.5.
-// Z snap zones: 0 → 6px, 1 → 8px, 2 → 10px, 3 → 12px
-const GRID = { min: 0, max: 3, center: 1.5 } as const;
+// ─── GRID CONFIG ─────────────────────────────────────────────────────────────
 
-const VIEW_SIZE = 100;
-const SVG_PAD = 14;
-const SVG_SPAN = VIEW_SIZE - 2 * SVG_PAD;
+// Fixed size chart — back → front. Independent of grid size so dots look the
+// same regardless of how many columns the grid has. Editable for tuning.
+const DOT_SIZES = [6, 8, 12, 16] as const;
 
-const DOT_COUNT = 16;
+// Pure coordinate-system description. Contains no state-specific data —
+// adding or removing a state never requires changing this type.
+type GridConfig = {
+  n: number;
+  dotCount: number;
+  grid: { min: 0; max: number; center: number };
+};
 
-// Clamped size chart — back → front. Editable for tuning.
-const DOT_SIZES = [6, 8, 10, 12] as const;
-
-// Fallback opacity pattern (row-major 4×4).
-const DEFAULT_OPACITIES = [
-  0.12, 1, 0.45, 1, 1, 0.45, 1, 0.45, 0.45, 1, 0.45, 1, 1, 0.45, 1, 0.12,
-];
-
-// Thinking: one sine wave along Fibonacci spiral index order; +0.5 = 50% path offset; `opacityAngle` is advanced by `opacitySpeed` (rad/s), independent of layout rotation.
-const THINKING_OPACITY_MIN = 0.12;
-const THINKING_OPACITY_MAX = 1;
-
-const thinkingOpacities = (opacityAngle = 0): number[] =>
-  Array.from({ length: DOT_COUNT }, (_, i) => {
-    const u = (i / DOT_COUNT + 0.5) % 1;
-    const w = 0.5 + 0.5 * Math.sin(2 * Math.PI * u + opacityAngle);
-    return (
-      THINKING_OPACITY_MIN + (THINKING_OPACITY_MAX - THINKING_OPACITY_MIN) * w
-    );
-  });
+const buildGridConfig = (n: number): GridConfig => {
+  const dotCount = n * n;
+  const grid = { min: 0 as const, max: n - 1, center: (n - 1) / 2 };
+  return { n, dotCount, grid };
+};
 
 // ─── 3D math ─────────────────────────────────────────────────────────────────
 
@@ -47,38 +43,151 @@ const rotateY = ({ x, y, z }: Vec3, a: number): Vec3 => {
 
 // ─── Orthographic projection (drop Z, map X/Y → SVG) ────────────────────────
 
-const snapSize = (z: number): number => {
-  const t = (z - GRID.min) / (GRID.max - GRID.min);
+const VIEW_SIZE = 100;
+const SVG_PAD = 14;
+const SVG_SPAN = VIEW_SIZE - 2 * SVG_PAD;
+
+const snapSize = (z: number, config: GridConfig): number => {
+  const t = (z - config.grid.min) / (config.grid.max - config.grid.min);
   const idx = Math.round(Math.max(0, Math.min(1, t)) * (DOT_SIZES.length - 1));
   return DOT_SIZES[idx];
 };
 
 type Projected = { sx: number; sy: number; size: number; z: number };
 
-const project = (v: Vec3): Projected => ({
-  sx: SVG_PAD + ((v.x - GRID.min) / (GRID.max - GRID.min)) * SVG_SPAN,
-  sy: SVG_PAD + ((v.y - GRID.min) / (GRID.max - GRID.min)) * SVG_SPAN,
-  size: snapSize(v.z),
+const project = (v: Vec3, config: GridConfig): Projected => ({
+  sx:
+    SVG_PAD +
+    ((v.x - config.grid.min) / (config.grid.max - config.grid.min)) * SVG_SPAN,
+  sy:
+    SVG_PAD +
+    ((v.y - config.grid.min) / (config.grid.max - config.grid.min)) * SVG_SPAN,
+  size: snapSize(v.z, config),
   z: v.z,
 });
 
-// ─── GEOMETRY ────────────────────────────────────────────────────────────────
+// ─── STATE-SPECIFIC BUILDERS ─────────────────────────────────────────────────
+// Each builder is private to the state that needs it; none of these values
+// belong on GridConfig — they are implementation details of individual states.
 
-const SPHERE_BASE: Vec3[] = (() => {
+// ─── Dormant — hand-crafted logotype pattern ──────────────────────────────────
+// The 7×7 master is the canonical design reference. All other grid sizes are
+// derived from it via nearest-neighbour sampling so the logo character is
+// preserved at any resolution. dim = 0.12, full = 1.
+//
+// Visualised (D = dim, █ = full, ▒ = half):
+//   D █ █ D █ █ █
+//   █ ▒ █ █ D █ █
+//   █ █ ▒ █ █ D █
+//   D █ █ ▒ █ █ D
+//   █ D █ █ ▒ █ █
+//   █ █ D █ █ ▒ █
+//   █ █ █ D █ █ D
+const DORMANT_MASTER_N = 7;
+const DORMANT_MASTER: readonly number[] = [
+  // row 0
+  0.12, 1, 1, 0.12, 1, 1, 1,
+  // row 1
+  1, 0.45, 1, 1, 0.12, 1, 1,
+  // row 2
+  1, 1, 0.45, 1, 1, 0.12, 1,
+  // row 3
+  0.12, 1, 1, 0.45, 1, 1, 0.12,
+  // row 4
+  1, 0.12, 1, 1, 0.45, 1, 1,
+  // row 5
+  1, 1, 0.12, 1, 1, 0.45, 1,
+  // row 6
+  1, 1, 1, 0.12, 1, 1, 0.12,
+];
+
+// ─── Dormant 4×4 overrides ────────────────────────────────────────────────────
+// Full designer control over opacities and Z (dot size) at 4×4.
+// Opacities: 0.12 = dim, 0.45 = half, 1 = full.
+// Z: integer in 0–3 — 0 = back/smallest dot, 3 = front/largest dot.
+//
+// (D = dim, █ = full, ▒ = half)
+//   D █ █ █
+//   █ ▒ █ █
+//   █ █ ▒ █
+//   █ █ █ D
+
+const DORMANT_4x4_OPACITIES: readonly number[] = [
+  // row 0
+  0.12, 1, 0.12, 1,
+  // row 1
+  1, 0.45, 1, 0.12,
+  // row 2
+  0.12, 1, 0.45, 1,
+  // row 3
+  1, 0.12, 1, 0.12,
+];
+
+// Z per dot in 0–3 order; edit to give individual dots more or less visual weight.
+const DORMANT_4x4_Z: readonly number[] = [
+  // row 0
+  1, 2, 2, 2,
+  // row 1
+  2, 2, 3, 2,
+  // row 2
+  2, 3, 2, 2,
+  // row 3
+  2, 2, 2, 1,
+];
+
+// Nearest-neighbour downsample from the 7×7 master to any n×n grid.
+// Per-size overrides take priority and bypass the downsampler entirely.
+const buildDormantOpacities = (n: number): number[] => {
+  if (n === 4) return [...DORMANT_4x4_OPACITIES];
+  if (n === DORMANT_MASTER_N) return [...DORMANT_MASTER];
+  const span = DORMANT_MASTER_N - 1; // 6
+  return Array.from({ length: n * n }, (_, idx) => {
+    const col = idx % n;
+    const row = Math.floor(idx / n);
+    const srcCol = n === 1 ? 0 : Math.round((col / (n - 1)) * span);
+    const srcRow = n === 1 ? 0 : Math.round((row / (n - 1)) * span);
+    return DORMANT_MASTER[srcRow * DORMANT_MASTER_N + srcCol];
+  });
+};
+
+// Thinking: Fibonacci sphere sized to dotCount.
+const buildSphereBase = (config: GridConfig): Vec3[] => {
+  const { dotCount } = config;
   const phi = Math.PI * (3 - Math.sqrt(5));
-  return Array.from({ length: DOT_COUNT }, (_, i) => {
-    const y = 1 - (i / (DOT_COUNT - 1)) * 2;
+  return Array.from({ length: dotCount }, (_, i) => {
+    // Flip latitude vs classic Fibonacci so low i (dormant top rows) maps to low grid y.
+    const y = dotCount <= 1 ? 0 : (i / (dotCount - 1)) * 2 - 1;
     const r = Math.sqrt(1 - y * y);
     const theta = phi * i;
     return { x: Math.cos(theta) * r, y, z: Math.sin(theta) * r };
   });
-})();
+};
+
+// Loading: column-major fill order (x 0→n-1, y n-1→0) plus its inverse rank map.
+const buildLoadingOrder = (
+  config: GridConfig,
+): { fillOrder: number[]; dotRank: number[] } => {
+  const { n, dotCount } = config;
+  const fillOrder: number[] = [];
+  for (let x = 0; x < n; x++) {
+    for (let y = n - 1; y >= 0; y--) {
+      fillOrder.push(y * n + x);
+    }
+  }
+  const dotRank: number[] = new Array(dotCount);
+  fillOrder.forEach((dotIdx, rank) => {
+    dotRank[dotIdx] = rank;
+  });
+  return { fillOrder, dotRank };
+};
 
 // ─── STATE SYSTEM ────────────────────────────────────────────────────────────
 
 export type StateKey = "dormant" | "thinking" | "loading";
 
-type Opacities = number[] | ((angle?: number) => number[]);
+type OpacitySolveCtx = { layoutAngle: number; opacityAngle: number };
+
+type Opacities = number[] | ((ctx: OpacitySolveCtx) => number[]);
 
 type StateDef = {
   label: string;
@@ -87,117 +196,182 @@ type StateDef = {
   animated: boolean;
   /** Radians per second — passed to `layout()` (3D spin). */
   layoutSpeed?: number;
-  /** Radians per second — phase for functional opacities (e.g. `thinkingOpacities`). Defaults to `layoutSpeed` when omitted. */
+  /** Radians per second — phase for functional opacities. Defaults to `layoutSpeed` when omitted. */
   opacitySpeed?: number;
 };
 
-const resolveOpacities = (o: Opacities, angle = 0): number[] =>
-  typeof o === "function" ? o(angle) : o;
+const resolveOpacities = (o: Opacities, ctx: OpacitySolveCtx): number[] =>
+  typeof o === "function" ? o(ctx) : o;
 
-// Inner 2×2 block of the 4×4 grid (indices 5,6,9,10).
-const INNER = new Set([6, 9]);
+// ─── Layout / opacity functions ───────────────────────────────────────────────
 
-const dormantLayout = (): Vec3[] =>
-  Array.from({ length: DOT_COUNT }, (_, i) => ({
-    x: i % 4,
-    y: Math.floor(i / 4),
-    z: INNER.has(i) ? GRID.max - 1 : GRID.max - 2,
+// Inverse grid-density Z: smaller grids → higher Z (larger dots), larger grids
+// → lower Z (smaller dots). Steps through DOT_SIZES largest→smallest as n
+// grows, skipping n=4 (which has its own per-dot override). Back-solves to the
+// Z value that snapSize will correctly round back to the target size index.
+// Adapts automatically if DOT_SIZES gains or loses entries.
+//
+// n ≤ 3 → step 0 (DOT_SIZES max)
+// n = 5 → step 1
+// n = 6 → step 2
+// n ≥ 7 → step 3+ (clamped to DOT_SIZES min)
+const gridBaseZ = (config: GridConfig): number => {
+  const step = config.n <= 3 ? 0 : config.n - 4;
+  const sizeIdx = Math.max(0, DOT_SIZES.length - 1 - step);
+  return Math.round((sizeIdx / (DOT_SIZES.length - 1)) * config.grid.max);
+};
+
+// Dormant: all dots at baseZ (static logo pattern; opacity carries the design).
+// n=4 uses DORMANT_4x4_Z for per-dot size control instead.
+const dormantLayout = (config: GridConfig): Vec3[] => {
+  const baseZ = gridBaseZ(config);
+  return Array.from({ length: config.dotCount }, (_, i) => ({
+    x: i % config.n,
+    y: Math.floor(i / config.n),
+    z: config.n === 4 ? DORMANT_4x4_Z[i] : baseZ,
   }));
+};
 
-const thinkingLayout = (angle = 0): Vec3[] =>
-  SPHERE_BASE.map((pt) => {
+// Thinking: sphere Z mapped onto [0, baseZ] so front dots match the grid's
+// target size and size variation scales down with grid density.
+const thinkingLayout = (
+  config: GridConfig,
+  sphereBase: Vec3[],
+  angle = 0,
+): Vec3[] => {
+  const baseZ = gridBaseZ(config);
+  return sphereBase.map((pt) => {
     const r = rotateY(pt, angle);
     return {
-      x: GRID.center + r.x * GRID.center,
-      y: GRID.center + r.y * GRID.center,
-      z: GRID.center + r.z * GRID.center,
+      x: config.grid.center + r.x * config.grid.center,
+      y: config.grid.center + r.y * config.grid.center,
+      z: baseZ * (0.5 + 0.5 * r.z),
     };
   });
+};
 
-// ─── Loading state ────────────────────────────────────────────────────────────
-// Fill order: column by column (x=0→3), bottom-to-top within each column (y=3→0).
-// Grid is row-major: index i → x = i%4, y = floor(i/4), so y=3 is visual bottom.
-const LOADING_FILL_ORDER = [
-  12, 8, 4, 0, 13, 9, 5, 1, 14, 10, 6, 2, 15, 11, 7, 3,
-];
+const THINKING_OPACITY_MIN = 0.12;
+const THINKING_OPACITY_MAX = 1;
 
-// Inverse map: dot index → its rank in the fill sequence.
-const LOADING_DOT_RANK: number[] = new Array(DOT_COUNT);
-LOADING_FILL_ORDER.forEach((dotIdx, rank) => {
-  LOADING_DOT_RANK[dotIdx] = rank;
-});
+// Sine along spiral index (opacityAngle) × back-face fade from rotateY (layoutAngle).
+// thinkingLayout maps z = baseZ*(0.5 + 0.5*r.z); r.z = -1 ⇒ z = 0 (furthest back).
+const thinkingOpacities = (
+  config: GridConfig,
+  sphereBase: Vec3[],
+  layoutAngle: number,
+  opacityAngle: number,
+): number[] =>
+  Array.from({ length: config.dotCount }, (_, i) => {
+    const r = rotateY(sphereBase[i]!, layoutAngle);
+    const depthVisible = (r.z + 1) / 2;
+    const u = (i / config.dotCount + 0.5) % 1;
+    const w = 0.5 + 0.5 * Math.sin(2 * Math.PI * u + opacityAngle);
+    const wave =
+      THINKING_OPACITY_MIN + (THINKING_OPACITY_MAX - THINKING_OPACITY_MIN) * w;
+    return clamp(wave * depthVisible, 0, 1);
+  });
 
-const LOADING_PAUSE = 2; // extra units after last dot fills
-const LOADING_CYCLE = DOT_COUNT + LOADING_PAUSE; // 20 units per loop
-const LOADING_TRAIL_STEPS = DOT_COUNT - 1; // ranks until trail reaches min
+const LOADING_PAUSE = 2;
 const LOADING_FILLED_OPACITY_MIN = 0.12;
 
-// Each dot independently tracks how long ago it was most recently filled,
-// so loop transitions are seamless — no global phase reset.
-const loadingTimeSinceFill = (angle: number, rank: number): number => {
-  if (angle < rank) return Infinity; // not yet reached on first pass
-  return (angle - rank) % LOADING_CYCLE;
+const loadingTimeSinceFill = (
+  angle: number,
+  rank: number,
+  cycle: number,
+): number => {
+  if (angle < rank) return Infinity;
+  return (angle - rank) % cycle;
 };
 
-const loadingLayout = (angle = 0): Vec3[] =>
-  Array.from({ length: DOT_COUNT }, (_, i) => {
-    const age = loadingTimeSinceFill(angle, LOADING_DOT_RANK[i]);
-    const trailT = Math.min(age / LOADING_TRAIL_STEPS, 1);
+// Loading: fill front at baseZ, trail falls to baseZ - 2 (clamped to grid.min).
+const loadingLayout = (
+  config: GridConfig,
+  dotRank: number[],
+  angle = 0,
+): Vec3[] => {
+  const baseZ = gridBaseZ(config);
+  const trailZ = Math.max(config.grid.min, baseZ - 2);
+  const cycle = config.dotCount + LOADING_PAUSE;
+  const trailSteps = config.dotCount - 1;
+  return Array.from({ length: config.dotCount }, (_, i) => {
+    const age = loadingTimeSinceFill(angle, dotRank[i], cycle);
+    const trailT = Math.min(age / trailSteps, 1);
     return {
-      x: i % 4,
-      y: Math.floor(i / 4),
-      z: age < DOT_COUNT ? lerp(GRID.max, GRID.max - 2, trailT) : GRID.max - 2,
+      x: i % config.n,
+      y: Math.floor(i / config.n),
+      z: age < config.dotCount ? lerp(baseZ, trailZ, trailT) : trailZ,
     };
   });
-
-const loadingOpacities = (angle = 0): number[] =>
-  Array.from({ length: DOT_COUNT }, (_, i) => {
-    const age = loadingTimeSinceFill(angle, LOADING_DOT_RANK[i]);
-    if (age >= DOT_COUNT) return 0.12;
-    const trailT = Math.min(age / LOADING_TRAIL_STEPS, 1);
-    return lerp(1, LOADING_FILLED_OPACITY_MIN, trailT);
-  });
-
-const STATES: Record<StateKey, StateDef> = {
-  dormant: {
-    label: "Dormant",
-    layout: dormantLayout,
-    opacities: DEFAULT_OPACITIES,
-    animated: false,
-  },
-  thinking: {
-    label: "Thinking",
-    layout: thinkingLayout,
-    opacities: thinkingOpacities,
-    animated: true,
-    layoutSpeed: 3,
-    opacitySpeed: 4,
-  },
-  loading: {
-    label: "Loading",
-    layout: loadingLayout,
-    opacities: loadingOpacities,
-    animated: true,
-    layoutSpeed: 12,
-  },
 };
 
-export const STATE_KEYS = Object.keys(STATES) as StateKey[];
+const loadingOpacities = (
+  config: GridConfig,
+  dotRank: number[],
+  angle: number,
+): number[] => {
+  const cycle = config.dotCount + LOADING_PAUSE;
+  const trailSteps = config.dotCount - 1;
+  return Array.from({ length: config.dotCount }, (_, i) => {
+    const age = loadingTimeSinceFill(angle, dotRank[i], cycle);
+    if (age >= config.dotCount) return 0.12;
+    const trailT = Math.min(age / trailSteps, 1);
+    return lerp(1, LOADING_FILLED_OPACITY_MIN, trailT);
+  });
+};
 
-export const getStateLabel = (key: StateKey): string => STATES[key].label;
+// ─── buildStates ──────────────────────────────────────────────────────────────
+// State-specific precomputed data is closed over here — private to each state,
+// computed once per GridConfig, and invisible to the GridConfig type itself.
+
+const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
+  const dormantOpacities = buildDormantOpacities(config.n);
+  const sphereBase = buildSphereBase(config);
+  const { dotRank } = buildLoadingOrder(config);
+
+  return {
+    dormant: {
+      label: "Dormant",
+      layout: () => dormantLayout(config),
+      opacities: dormantOpacities,
+      animated: false,
+    },
+    thinking: {
+      label: "Thinking",
+      layout: (angle = 0) => thinkingLayout(config, sphereBase, angle),
+      opacities: (ctx) =>
+        thinkingOpacities(config, sphereBase, ctx.layoutAngle, ctx.opacityAngle),
+      animated: true,
+      layoutSpeed: 3,
+      opacitySpeed: 4,
+    },
+    loading: {
+      label: "Loading",
+      layout: (angle = 0) => loadingLayout(config, dotRank, angle),
+      opacities: (ctx) => loadingOpacities(config, dotRank, ctx.opacityAngle),
+      animated: true,
+      layoutSpeed: 12,
+    },
+  };
+};
+
+export const STATE_KEYS: StateKey[] = ["dormant", "thinking", "loading"];
+
+const STATE_LABELS: Record<StateKey, string> = {
+  dormant: "Dormant",
+  thinking: "Thinking",
+  loading: "Loading",
+};
+
+export const getStateLabel = (key: StateKey): string => STATE_LABELS[key];
 
 // ─── SPRING CONFIG ───────────────────────────────────────────────────────────
 
 const SPRING = {
   type: "spring" as const,
-  stiffness: 100,
-  damping: 18,
+  stiffness: 240,
+  damping: 25,
   mass: 0.8,
 };
-const STAGGER = 0.035;
-
-/** Seconds — eases discrete Z→radius steps while the sphere spins (imperative MV updates skip CSS/Motion transitions). */
-const RADIUS_SMOOTH_TAU_S = 0.2;
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -208,24 +382,63 @@ type DotMV = {
   opacity: MotionValue<number>;
 };
 
-type Snapshot = { sx: number; sy: number; r: number; opacity: number };
-
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-// Semi-implicit Euler step for a spring toward target = 1.
-// Runs inside the rAF tick so it shares the exact same dt.
-const stepBlend = (
-  val: number,
-  vel: number,
-  dt: number,
-): { val: number; vel: number } => {
-  const force = -SPRING.stiffness * (val - 1) - SPRING.damping * vel;
-  const nv = vel + (force / SPRING.mass) * dt;
-  const np = val + nv * dt;
-  if (Math.abs(np - 1) < 0.001 && Math.abs(nv) < 0.01)
-    return { val: 1, vel: 0 };
-  return { val: np, vel: nv };
+const DotCircle = ({
+  mv,
+  i,
+  dotCount,
+}: {
+  mv: DotMV;
+  i: number;
+  dotCount: number;
+}) => {
+  // Per-dot spring variation gives a mild spatial cascade without explicit delays.
+  const t = dotCount <= 1 ? 0 : i / (dotCount - 1);
+  const spring = {
+    ...SPRING,
+    stiffness: SPRING.stiffness * (1 - 0.35 * t),
+    damping: SPRING.damping * (1 + 0.24 * t),
+    mass: SPRING.mass * (1 + 0.6 * t),
+  } as const;
+
+  const cx = useSpring(mv.cx.get(), spring);
+  const cy = useSpring(mv.cy.get(), spring);
+  const r = useSpring(mv.r.get(), spring);
+  const opacity = useSpring(mv.opacity.get(), SPRING);
+
+  useMotionValueEvent(mv.cx, "change", (latest) => cx.set(latest));
+  useMotionValueEvent(mv.cy, "change", (latest) => cy.set(latest));
+  useMotionValueEvent(mv.r, "change", (latest) => r.set(latest));
+  useMotionValueEvent(mv.opacity, "change", (latest) => opacity.set(latest));
+
+  // When the underlying MotionValue instances change (state switch),
+  // nudge spring targets so rapid switching feels like "following" rather than
+  // restarting queued animations.
+  useEffect(() => {
+    cx.set(mv.cx.get());
+    cy.set(mv.cy.get());
+    r.set(mv.r.get());
+    opacity.set(mv.opacity.get());
+  }, [mv.cx, mv.cy, mv.r, mv.opacity, cx, cy, r, opacity]);
+
+  return (
+    <motion.circle
+      cx={cx}
+      cy={cy}
+      r={r}
+      fill="currentColor"
+      fillOpacity={opacity}
+    />
+  );
 };
+
+const clamp = (v: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, v));
+
+// Opacity-only stagger for state changes (no spatial sequencing).
+const OPACITY_STAGGER_MS = 12;
+const OPACITY_CROSSFADE_MS = 160;
 
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 
@@ -234,165 +447,121 @@ const DotIcon = ({
   state = "dormant",
   color,
   style,
+  grid = 4,
 }: {
   size?: number;
   state?: StateKey;
   color?: string;
   style?: CSSProperties;
+  grid?: number;
 }) => {
-  const stateRef = useRef(state);
+  const time = useTime();
+  const phaseStartMsRef = useRef(0);
+  const stateRef = useRef<StateKey>(state);
   stateRef.current = state;
 
-  const mvsRef = useRef<DotMV[] | null>(null);
-  if (!mvsRef.current) {
-    const def = STATES[state];
-    const proj = def.layout(0).map(project);
-    const opa = resolveOpacities(def.opacities, 0);
-    mvsRef.current = proj.map((p, i) => ({
+  const config = useMemo(() => buildGridConfig(grid), [grid]);
+  const states = useMemo(() => buildStates(config), [config]);
+
+  // Refs so the Motion event handler (registered once) always reads latest values.
+  const configRef = useRef(config);
+  configRef.current = config;
+  const statesRef = useRef(states);
+  statesRef.current = states;
+
+  const opacityTransitionRef = useRef<{
+    state: StateKey;
+    startMs: number;
+    from: number[];
+  } | null>(null);
+
+  // Target MotionValues that the DotCircle springs follow.
+  // Rebuilt when grid changes (dot count changes — no continuity is possible).
+  const gridRef = useRef(grid);
+  const targetsRef = useRef<DotMV[] | null>(null);
+
+  if (!targetsRef.current || gridRef.current !== grid) {
+    gridRef.current = grid;
+    const def = states[state];
+    const proj = def.layout(0).map((v) => project(v, config));
+    const opa = resolveOpacities(def.opacities, {
+      layoutAngle: 0,
+      opacityAngle: 0,
+    });
+    targetsRef.current = proj.map((p, i) => ({
       cx: motionValue(p.sx),
       cy: motionValue(p.sy),
       r: motionValue(p.size / 2),
       opacity: motionValue(opa[i]),
     }));
+    opacityTransitionRef.current = null;
   }
-  const mvs = mvsRef.current;
 
-  const rafRef = useRef<number | null>(null);
-  const layoutAngleRef = useRef(0);
-  const opacityAngleRef = useRef(0);
-  const tRef = useRef<number | null>(null);
-  const ctrlsRef = useRef<{ stop: () => void }[]>([]);
-
-  const stopAnims = useCallback(() => {
-    ctrlsRef.current.forEach((c) => c.stop());
-    ctrlsRef.current = [];
-  }, []);
-
-  const morphTo = useCallback(
-    (targets: Projected[], opacities: number[]) => {
-      stopAnims();
-      mvs.forEach((mv, i) => {
-        const cfg = { ...SPRING, delay: i * STAGGER };
-        ctrlsRef.current.push(animate(mv.cx, targets[i].sx, cfg));
-        ctrlsRef.current.push(animate(mv.cy, targets[i].sy, cfg));
-        ctrlsRef.current.push(animate(mv.r, targets[i].size / 2, cfg));
-        ctrlsRef.current.push(animate(mv.opacity, opacities[i], cfg));
-      });
-    },
-    [mvs, stopAnims],
-  );
-
-  const stopLoop = useCallback(() => {
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      tRef.current = null;
-    }
-  }, []);
-
-  const startLoop = useCallback(
-    (key: StateKey, def: StateDef, sources?: Snapshot[]) => {
-      if (rafRef.current) return;
-      tRef.current = null;
-
-      // Per-dot blend springs, computed in-loop so they share the same dt.
-      const blends = sources
-        ? Array.from({ length: DOT_COUNT }, () => ({ val: 0, vel: 0 }))
-        : null;
-      let elapsed = 0;
-
-      const tick = () => {
-        if (stateRef.current !== key) {
-          rafRef.current = null;
-          return;
-        }
-        const now = performance.now();
-        if (tRef.current !== null) {
-          const dt = (now - tRef.current) / 1000;
-          elapsed += dt;
-          const layoutSpeed = def.layoutSpeed ?? 0.6;
-          const opacitySpeed = def.opacitySpeed ?? layoutSpeed;
-          layoutAngleRef.current += layoutSpeed * dt;
-          opacityAngleRef.current += opacitySpeed * dt;
-
-          if (blends) {
-            for (let i = 0; i < DOT_COUNT; i++) {
-              const b = blends[i];
-              if (b.val < 1 && elapsed >= i * STAGGER) {
-                const next = stepBlend(b.val, b.vel, dt);
-                b.val = next.val;
-                b.vel = next.vel;
-              }
-            }
-          }
-
-          const proj = def.layout(layoutAngleRef.current).map(project);
-          const opa = resolveOpacities(def.opacities, opacityAngleRef.current);
-
-          proj.forEach((p, i) => {
-            const tx = p.sx;
-            const ty = p.sy;
-            const tr = p.size / 2;
-            const to = opa[i];
-
-            const rAlpha = 1 - Math.exp(-dt / RADIUS_SMOOTH_TAU_S);
-            if (sources && blends) {
-              const b = blends[i].val;
-              const s = sources[i];
-              mvs[i].cx.set(lerp(s.sx, tx, b));
-              mvs[i].cy.set(lerp(s.sy, ty, b));
-              const desiredR = lerp(s.r, tr, b);
-              mvs[i].r.set(lerp(mvs[i].r.get(), desiredR, rAlpha));
-              mvs[i].opacity.set(lerp(s.opacity, to, b));
-            } else {
-              mvs[i].cx.set(tx);
-              mvs[i].cy.set(ty);
-              mvs[i].r.set(lerp(mvs[i].r.get(), tr, rAlpha));
-              mvs[i].opacity.set(to);
-            }
-          });
-
-        }
-        tRef.current = now;
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-    },
-    [mvs],
-  );
+  const targetMvs = targetsRef.current;
 
   // ─── State transitions ────────────────────────────────────────────────────
 
   useEffect(() => {
-    const def = STATES[state];
+    phaseStartMsRef.current = time.get();
+    opacityTransitionRef.current = {
+      state,
+      startMs: time.get(),
+      from: targetsRef.current!.map((mv) => mv.opacity.get()),
+    };
+  }, [state, time]);
 
-    stopLoop();
-    stopAnims();
-    layoutAngleRef.current = 0;
-    opacityAngleRef.current = 0;
+  useMotionValueEvent(time, "change", (ms) => {
+    const key = stateRef.current;
+    const def = statesRef.current[key];
+    const cfg = configRef.current;
+    const mvs = targetsRef.current!;
+    const t = (ms - phaseStartMsRef.current) / 1000;
 
-    if (def.animated) {
-      const src: Snapshot[] = mvs.map((mv) => ({
-        sx: mv.cx.get(),
-        sy: mv.cy.get(),
-        r: mv.r.get(),
-        opacity: mv.opacity.get(),
-      }));
+    const layoutAngle = def.animated ? (def.layoutSpeed ?? 0) * t : 0;
+    const opacityAngle = def.animated
+      ? (def.opacitySpeed ?? def.layoutSpeed ?? 0) * t
+      : 0;
 
-      startLoop(state, def, src);
-    } else {
-      const proj = def.layout(0).map(project);
-      const opa = resolveOpacities(def.opacities, 0);
-      morphTo(proj, opa);
+    const proj = def.layout(layoutAngle).map((v) => project(v, cfg));
+    const opa = resolveOpacities(def.opacities, {
+      layoutAngle,
+      opacityAngle,
+    });
+
+    const tr = opacityTransitionRef.current;
+    const inOpacityTransition = tr?.state === key;
+    const transitionElapsedMs = inOpacityTransition ? ms - tr.startMs : 0;
+
+    const dotCount = mvs.length;
+    for (let i = 0; i < dotCount; i++) {
+      mvs[i].cx.set(proj[i].sx);
+      mvs[i].cy.set(proj[i].sy);
+      mvs[i].r.set(Math.max(0, proj[i].size / 2));
+
+      const targetOpacity = clamp(opa[i], 0, 1);
+      if (!inOpacityTransition) {
+        mvs[i].opacity.set(targetOpacity);
+        continue;
+      }
+
+      const localMs = transitionElapsedMs - i * OPACITY_STAGGER_MS;
+      const blendT = clamp(localMs / OPACITY_CROSSFADE_MS, 0, 1);
+      if (blendT >= 1) {
+        mvs[i].opacity.set(targetOpacity);
+        continue;
+      }
+
+      const from = clamp(tr.from[i] ?? targetOpacity, 0, 1);
+      mvs[i].opacity.set(lerp(from, targetOpacity, blendT));
     }
 
-    return () => {
-      stopAnims();
-      stopLoop();
-    };
-  }, [state, morphTo, startLoop, stopLoop, stopAnims, mvs]);
-
-  useEffect(() => () => stopLoop(), [stopLoop]);
+    // Once the last dot has fully blended, stop doing special-case math.
+    if (inOpacityTransition) {
+      const doneAtMs =
+        (dotCount - 1) * OPACITY_STAGGER_MS + OPACITY_CROSSFADE_MS;
+      if (transitionElapsedMs >= doneAtMs) opacityTransitionRef.current = null;
+    }
+  });
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -412,15 +581,8 @@ const DotIcon = ({
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: "visible" }}
       >
-        {mvs.map((mv, i) => (
-          <motion.circle
-            key={i}
-            cx={mv.cx}
-            cy={mv.cy}
-            r={mv.r}
-            fill="currentColor"
-            fillOpacity={mv.opacity}
-          />
+        {targetMvs.map((mv, i) => (
+          <DotCircle key={i} mv={mv} i={i} dotCount={config.dotCount} />
         ))}
       </svg>
     </div>
