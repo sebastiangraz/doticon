@@ -3,17 +3,22 @@
   --ui-background: light-dark(hsla(0, 0%, 100%, 1), hsla(0, 0%, 0%, 1));
   --ui-foreground: light-dark(hsla(0, 0%, 0%, 1), hsla(0, 0%, 100%, 1));
   --ui-border: light-dark(hsla(0, 0%, 0%, 0.1), hsla(0, 0%, 100%, 0.06));
-  --ui-secondary: light-dark(hsla(0, 0%, 0%, 0.05), hsla(0, 0%, 100%, 0.05));
+  --ui-secondary: light-dark(hsla(0, 0%, 0%, 0.56), hsla(0, 0%, 100%, 0.56));
 }
 
 .container {
-  margin-block: 8rlh;
+  width: 92%;
+  max-width: 1080px;
+  padding: 0 16px;
+  margin: 8rlh auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 32px;
-  font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+  gap: 3rlh;
   color: currentColor;
+  transition:
+    color 0.25s ease,
+    background-color 0.2s ease;
   h1 {
     font-size: 3rlh;
     margin: 0;
@@ -40,7 +45,7 @@
 }
 
 .stateButton {
-  padding: 6px 14px;
+  padding: 12px 17px;
   font-size: 11px;
   font-family: inherit;
   letter-spacing: 0.08em;
@@ -98,6 +103,7 @@
   cursor: pointer;
   user-select: none;
   opacity: 0.85;
+  color: var(--ui-secondary);
 }
 
 .gridSlider {
@@ -140,7 +146,6 @@
 .propsRow {
   display: flex;
   gap: 0.5rlh;
-  max-width: 1080px;
   user-select: none;
 }
 

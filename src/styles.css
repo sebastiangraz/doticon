@@ -1,4 +1,20 @@
 /* Default to light; CSS toggle flips to dark. */
+@font-face {
+  font-family: "Sohne Mono";
+  src: url("./assets/sohnemono-buch.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Sohne Mono";
+  src: url("./assets/sohnemono-kraftig.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
 }
@@ -9,13 +25,16 @@
 }
 
 :root:has(#theme-mode-toggle:checked) canvas {
-  opacity: 0.32 !important;
+  opacity: 0.32;
 }
 
 body {
   margin: 0;
   padding: 0;
-  font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+  font-family:
+    "Sohne Mono", "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+  font-weight: 400;
+  font-style: normal;
   background: light-dark(white, black);
   color: light-dark(black, white);
 }
