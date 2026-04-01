@@ -33,7 +33,7 @@ export const Route = createFileRoute("/")({
           </svg>
 
           <div className={styles.controlsRow}>
-            <DotIcon size={48} state={icon3dState} grid={gridSize} />
+            <DotIcon size={80} state={icon3dState} grid={gridSize} />
             <div className={styles.stateButtons}>
               {STATE_KEYS.map((key: StateKey) => {
                 const active = icon3dState === key;
@@ -116,36 +116,33 @@ export const Route = createFileRoute("/")({
             </div>
           </div>
           <div className={styles.propsRow}>
-            <ExposeProps className={styles.prop}>
-              <DotIcon size={32} state={"dormant"} />
-              <DotIcon size={32} state={"dormant"} grid={3} />
-              <DotIcon size={32} state={"dormant"} grid={5} />
-              <DotIcon size={100} state={"dormant"} grid={4} />
-              <DotIcon size={100} state={"dormant"} grid={5} />
-              <DotIcon size={100} state={"dormant"} grid={6} />
-              <DotIcon size={100} state={"dormant"} grid={7} />
-              <DotIcon size={16} state={"dormant"} />
-            </ExposeProps>
-            <ExposeProps className={styles.prop}>
-              <DotIcon size={32} state={"thinking"} />
-              <DotIcon size={32} state={"thinking"} grid={3} />
-              <DotIcon size={32} state={"thinking"} grid={5} />
-              <DotIcon size={100} state={"thinking"} grid={4} />
-              <DotIcon size={100} state={"thinking"} grid={5} />
-              <DotIcon size={100} state={"thinking"} grid={6} />
-              <DotIcon size={100} state={"thinking"} grid={7} />
-              <DotIcon size={16} state={"thinking"} />
-            </ExposeProps>
-            <ExposeProps className={styles.prop}>
-              <DotIcon size={32} state={"loading"} />
-              <DotIcon size={32} state={"loading"} grid={3} />
-              <DotIcon size={32} state={"loading"} grid={5} />
-              <DotIcon size={100} state={"loading"} grid={4} />
-              <DotIcon size={100} state={"loading"} grid={5} />
-              <DotIcon size={100} state={"loading"} grid={6} />
-              <DotIcon size={100} state={"loading"} grid={7} />
-              <DotIcon size={16} state={"loading"} />
-            </ExposeProps>
+            <div className={styles.propsColumn}>
+              <ExposeProps className={styles.prop}>
+                <DotIcon size={80} state={"dormant"} grid={5} />
+              </ExposeProps>
+              <ExposeProps className={styles.prop}>
+                <DotIcon size={32} state={"dormant"} />
+                <DotIcon size={16} state={"dormant"} grid={3} />
+              </ExposeProps>
+            </div>
+            <div className={styles.propsColumn}>
+              <ExposeProps className={styles.prop}>
+                <DotIcon size={80} state={"thinking"} grid={5} />
+              </ExposeProps>
+              <ExposeProps className={styles.prop}>
+                <DotIcon size={32} state={"thinking"} />
+                <DotIcon size={16} state={"thinking"} grid={3} />
+              </ExposeProps>
+            </div>
+            <div className={styles.propsColumn}>
+              <ExposeProps className={styles.prop}>
+                <DotIcon size={80} state={"loading"} grid={5} />
+              </ExposeProps>
+              <ExposeProps className={styles.prop}>
+                <DotIcon size={32} state={"loading"} />
+                <DotIcon size={16} state={"loading"} grid={3} />
+              </ExposeProps>
+            </div>
           </div>
         </div>
         <Shader color={"#1E91AF"} color2={"#F7ED2C"} />

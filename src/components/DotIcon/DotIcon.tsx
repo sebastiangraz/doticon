@@ -106,6 +106,15 @@ const DORMANT_MASTER: readonly number[] = [
 //   █ █ ▒ █
 //   █ █ █ D
 
+const DORMANT_3x3_OPACITIES: readonly number[] = [
+  // row 0
+  0.12, 1, 0.12,
+  // row 1
+  1, 1, 1,
+  // row 2
+  0.12, 1, 0.12,
+];
+
 const DORMANT_4x4_OPACITIES: readonly number[] = [
   // row 0
   0.12, 1, 0.12, 1,
@@ -132,6 +141,7 @@ const DORMANT_4x4_Z: readonly number[] = [
 // Nearest-neighbour downsample from the 7×7 master to any n×n grid.
 // Per-size overrides take priority and bypass the downsampler entirely.
 const buildDormantOpacities = (n: number): number[] => {
+  if (n === 3) return [...DORMANT_3x3_OPACITIES];
   if (n === 4) return [...DORMANT_4x4_OPACITIES];
   if (n === DORMANT_MASTER_N) return [...DORMANT_MASTER];
   const span = DORMANT_MASTER_N - 1; // 6
@@ -257,7 +267,7 @@ const thinkingOpacities = (
 ): number[] =>
   Array.from({ length: config.dotCount }, (_, i) => {
     const r = rotateY(sphereBase[i]!, layoutAngle);
-    const depthVisible = (r.z + 1) / 2;
+    const depthVisible = (r.z + 1.5) / 2;
     const u = (i / config.dotCount + 0.5) % 1;
     const w = 0.5 + 0.5 * Math.sin(2 * Math.PI * u + opacityAngle);
     const wave =
@@ -293,7 +303,7 @@ const loadingLayout = (
     return {
       x: i % config.n,
       y: Math.floor(i / config.n),
-      z: age < config.dotCount ? lerp(baseZ, trailZ, trailT) : trailZ,
+      z: lerp(baseZ, trailZ, trailT),
     };
   });
 };
@@ -340,7 +350,7 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
           ctx.opacityAngle,
         ),
       animated: true,
-      layoutSpeed: 3,
+      layoutSpeed: 2.5,
       opacitySpeed: 4,
     },
     loading: {

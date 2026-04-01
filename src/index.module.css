@@ -157,6 +157,17 @@
   user-select: none;
 }
 
+.propsColumn {
+  & > :first-child {
+    margin-bottom: 1rlh;
+    /* & > * {
+      justify-content: center;
+      align-items: center;
+      display: flex;
+    } */
+  }
+}
+
 .themeToggle {
   z-index: 10;
   display: inline-flex;
@@ -184,14 +195,16 @@
   border-radius: 999px;
   cursor: pointer;
   user-select: none;
-  color: currentColor;
+  color: var(--ui-secondary);
   transition:
     background-color 0.15s ease,
+    color 0.15s ease,
     transform 0.15s ease;
 }
 
 .themeToggleButton:hover {
   background: var(--ui-border);
+  color: var(--ui-foreground);
 }
 
 .themeToggleInput:focus-visible + .themeToggleButton {
