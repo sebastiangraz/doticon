@@ -1,13 +1,6 @@
 import { useRef, useEffect, useMemo } from "react";
 import type { CSSProperties } from "react";
-import {
-  motion,
-  motionValue,
-  useTime,
-  useSpring,
-  useMotionValueEvent,
-  type MotionValue,
-} from "motion/react";
+import { useTime, useMotionValueEvent } from "motion/react";
 
 // ─── 3D ENGINE ───────────────────────────────────────────────────────────────
 
@@ -375,62 +368,40 @@ const SPRING = {
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-type DotMV = {
-  cx: MotionValue<number>;
-  cy: MotionValue<number>;
-  r: MotionValue<number>;
-  opacity: MotionValue<number>;
-};
-
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-const DotCircle = ({
-  mv,
-  i,
-  dotCount,
-}: {
-  mv: DotMV;
-  i: number;
-  dotCount: number;
-}) => {
-  // Per-dot spring variation gives a mild spatial cascade without explicit delays.
+/** One-dimensional damped spring step (semi-implicit Euler), same role as Motion `useSpring` targets. */
+type Spring1D = { value: number; velocity: number };
+
+const springStep1D = (
+  s: Spring1D,
+  target: number,
+  stiffness: number,
+  damping: number,
+  mass: number,
+  dt: number,
+) => {
+  const k = stiffness / mass;
+  const c = damping / mass;
+  const accel = -k * (s.value - target) - c * s.velocity;
+  s.velocity += accel * dt;
+  s.value += s.velocity * dt;
+};
+
+type DotSpringSim = {
+  cx: Spring1D;
+  cy: Spring1D;
+  r: Spring1D;
+  opacity: Spring1D;
+};
+
+const dotLayoutSpringParams = (i: number, dotCount: number) => {
   const t = dotCount <= 1 ? 0 : i / (dotCount - 1);
-  const spring = {
-    ...SPRING,
+  return {
     stiffness: SPRING.stiffness * (1 - 0.35 * t),
     damping: SPRING.damping * (1 + 0.24 * t),
     mass: SPRING.mass * (1 + 0.6 * t),
-  } as const;
-
-  const cx = useSpring(mv.cx.get(), spring);
-  const cy = useSpring(mv.cy.get(), spring);
-  const r = useSpring(mv.r.get(), spring);
-  const opacity = useSpring(mv.opacity.get(), SPRING);
-
-  useMotionValueEvent(mv.cx, "change", (latest) => cx.set(latest));
-  useMotionValueEvent(mv.cy, "change", (latest) => cy.set(latest));
-  useMotionValueEvent(mv.r, "change", (latest) => r.set(latest));
-  useMotionValueEvent(mv.opacity, "change", (latest) => opacity.set(latest));
-
-  // When the underlying MotionValue instances change (state switch),
-  // nudge spring targets so rapid switching feels like "following" rather than
-  // restarting queued animations.
-  useEffect(() => {
-    cx.set(mv.cx.get());
-    cy.set(mv.cy.get());
-    r.set(mv.r.get());
-    opacity.set(mv.opacity.get());
-  }, [mv.cx, mv.cy, mv.r, mv.opacity, cx, cy, r, opacity]);
-
-  return (
-    <motion.circle
-      cx={cx}
-      cy={cy}
-      r={r}
-      fill="currentColor"
-      fillOpacity={opacity}
-    />
-  );
+  };
 };
 
 const clamp = (v: number, min: number, max: number) =>
@@ -475,12 +446,14 @@ const DotIcon = ({
     from: number[];
   } | null>(null);
 
-  // Target MotionValues that the DotCircle springs follow.
-  // Rebuilt when grid changes (dot count changes — no continuity is possible).
+  // Per-dot spring state + imperative SVG updates — avoids N× MotionValue listeners
+  // (each `target.set` was fanning out to `useSpring` + `useMotionValueEvent` per dot).
   const gridRef = useRef(grid);
-  const targetsRef = useRef<DotMV[] | null>(null);
+  const springSimRef = useRef<DotSpringSim[] | null>(null);
+  const circleElsRef = useRef<(SVGCircleElement | null)[]>([]);
+  const lastTimeMsRef = useRef<number | null>(null);
 
-  if (!targetsRef.current || gridRef.current !== grid) {
+  if (!springSimRef.current || gridRef.current !== grid) {
     gridRef.current = grid;
     const def = states[state];
     const proj = def.layout(0).map((v) => project(v, config));
@@ -488,16 +461,18 @@ const DotIcon = ({
       layoutAngle: 0,
       opacityAngle: 0,
     });
-    targetsRef.current = proj.map((p, i) => ({
-      cx: motionValue(p.sx),
-      cy: motionValue(p.sy),
-      r: motionValue(p.size / 2),
-      opacity: motionValue(opa[i]),
+    springSimRef.current = proj.map((p, i) => ({
+      cx: { value: p.sx, velocity: 0 },
+      cy: { value: p.sy, velocity: 0 },
+      r: { value: Math.max(0, p.size / 2), velocity: 0 },
+      opacity: { value: opa[i] ?? 0, velocity: 0 },
     }));
+    circleElsRef.current = new Array(config.dotCount).fill(null);
+    lastTimeMsRef.current = null;
     opacityTransitionRef.current = null;
   }
 
-  const targetMvs = targetsRef.current;
+  const springSims = springSimRef.current;
 
   // ─── State transitions ────────────────────────────────────────────────────
 
@@ -506,7 +481,7 @@ const DotIcon = ({
     opacityTransitionRef.current = {
       state,
       startMs: time.get(),
-      from: targetsRef.current!.map((mv) => mv.opacity.get()),
+      from: springSimRef.current!.map((s) => s.opacity.value),
     };
   }, [state, time]);
 
@@ -514,7 +489,14 @@ const DotIcon = ({
     const key = stateRef.current;
     const def = statesRef.current[key];
     const cfg = configRef.current;
-    const mvs = targetsRef.current!;
+    const sims = springSimRef.current!;
+    const els = circleElsRef.current;
+
+    const prevMs = lastTimeMsRef.current;
+    lastTimeMsRef.current = ms;
+    const dtRaw = prevMs === null ? 0 : (ms - prevMs) / 1000;
+    const dt = Math.min(Math.max(dtRaw, 0), 1 / 30);
+
     const t = (ms - phaseStartMsRef.current) / 1000;
 
     const layoutAngle = def.animated ? (def.layoutSpeed ?? 0) * t : 0;
@@ -532,30 +514,57 @@ const DotIcon = ({
     const inOpacityTransition = tr?.state === key;
     const transitionElapsedMs = inOpacityTransition ? ms - tr.startMs : 0;
 
-    const dotCount = mvs.length;
+    const dotCount = sims.length;
     for (let i = 0; i < dotCount; i++) {
-      mvs[i].cx.set(proj[i].sx);
-      mvs[i].cy.set(proj[i].sy);
-      mvs[i].r.set(Math.max(0, proj[i].size / 2));
+      const s = sims[i]!;
+      const { stiffness, damping, mass } = dotLayoutSpringParams(i, dotCount);
 
-      const targetOpacity = clamp(opa[i], 0, 1);
-      if (!inOpacityTransition) {
-        mvs[i].opacity.set(targetOpacity);
-        continue;
+      const targetCx = proj[i].sx;
+      const targetCy = proj[i].sy;
+      const targetR = Math.max(0, proj[i].size / 2);
+
+      let targetOpacity = clamp(opa[i] ?? 0, 0, 1);
+      if (inOpacityTransition) {
+        const localMs = transitionElapsedMs - i * OPACITY_STAGGER_MS;
+        const blendT = clamp(localMs / OPACITY_CROSSFADE_MS, 0, 1);
+        if (blendT < 1) {
+          const from = clamp(tr!.from[i] ?? targetOpacity, 0, 1);
+          targetOpacity = lerp(from, targetOpacity, blendT);
+        }
       }
 
-      const localMs = transitionElapsedMs - i * OPACITY_STAGGER_MS;
-      const blendT = clamp(localMs / OPACITY_CROSSFADE_MS, 0, 1);
-      if (blendT >= 1) {
-        mvs[i].opacity.set(targetOpacity);
-        continue;
+      if (dt > 0) {
+        springStep1D(s.cx, targetCx, stiffness, damping, mass, dt);
+        springStep1D(s.cy, targetCy, stiffness, damping, mass, dt);
+        springStep1D(s.r, targetR, stiffness, damping, mass, dt);
+        springStep1D(
+          s.opacity,
+          targetOpacity,
+          SPRING.stiffness,
+          SPRING.damping,
+          SPRING.mass,
+          dt,
+        );
+      } else {
+        s.cx.value = targetCx;
+        s.cy.value = targetCy;
+        s.r.value = targetR;
+        s.opacity.value = targetOpacity;
       }
 
-      const from = clamp(tr.from[i] ?? targetOpacity, 0, 1);
-      mvs[i].opacity.set(lerp(from, targetOpacity, blendT));
+      const el = els[i];
+      if (el) {
+        const cx = s.cx.value;
+        const cy = s.cy.value;
+        const r = s.r.value;
+        const o = s.opacity.value;
+        el.setAttribute("cx", String(cx));
+        el.setAttribute("cy", String(cy));
+        el.setAttribute("r", String(r));
+        el.setAttribute("fill-opacity", String(o));
+      }
     }
 
-    // Once the last dot has fully blended, stop doing special-case math.
     if (inOpacityTransition) {
       const doneAtMs =
         (dotCount - 1) * OPACITY_STAGGER_MS + OPACITY_CROSSFADE_MS;
@@ -581,8 +590,18 @@ const DotIcon = ({
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: "visible" }}
       >
-        {targetMvs.map((mv, i) => (
-          <DotCircle key={i} mv={mv} i={i} dotCount={config.dotCount} />
+        {springSims.map((s, i) => (
+          <circle
+            key={i}
+            ref={(el) => {
+              circleElsRef.current[i] = el;
+            }}
+            cx={s.cx.value}
+            cy={s.cy.value}
+            r={s.r.value}
+            fill="currentColor"
+            fillOpacity={s.opacity.value}
+          />
         ))}
       </svg>
     </div>
