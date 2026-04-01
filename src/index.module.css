@@ -39,6 +39,7 @@
   cursor: pointer;
   transition: all 0.15s ease;
   color: inherit;
+  user-select: none;
 }
 
 .stateButton[data-active="true"] {
@@ -70,8 +71,41 @@
 }
 
 .gridSlider {
-  width: 120px;
-  accent-color: currentColor;
+  width: 3rlh;
+
+  /* Customizable tokens */
+  --slider-rail: light-dark(#0002, #fff2);
+  --slider-rail-fill: currentColor;
+  --slider-thumb: light-dark(#fff, #000);
+  --slider-thumb-ring: light-dark(#0002, #fff2);
+
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.gridSlider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--slider-rail);
+}
+
+.gridSlider::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--slider-thumb);
+  box-shadow: 0 0 0 1px var(--slider-thumb-ring);
+  margin-top: -5px; /* center thumb on 4px track */
+}
+
+.gridSlider:focus-visible {
+  outline: none;
+}
+
+.gridSlider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px light-dark(#0002, #fff2);
 }
 
 .gridValue {
@@ -82,7 +116,8 @@
 .propsRow {
   display: flex;
   gap: 0.5rlh;
-  max-width: 48rlh;
+  max-width: 64rlh;
+  user-select: none;
 }
 
 .themeToggle {
@@ -90,7 +125,7 @@
   display: inline-flex;
   align-items: center;
   padding: 2px;
-  /* border: 1px solid light-dark(#0001, #fff1); */
+  border: 1px solid light-dark(#0001, #fff0);
   border-radius: 999px;
   background: light-dark(rgba(255, 255, 255, 0.7), rgba(0, 0, 0, 0.1));
   backdrop-filter: blur(10px);
