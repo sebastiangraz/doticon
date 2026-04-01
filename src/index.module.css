@@ -116,7 +116,7 @@
 .propsRow {
   display: flex;
   gap: 0.5rlh;
-  max-width: 64rlh;
+  max-width: 1080px;
   user-select: none;
 }
 
@@ -142,8 +142,8 @@
 .themeToggleButton {
   display: inline-grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   cursor: pointer;
   user-select: none;
@@ -164,8 +164,8 @@
 
 .themeToggleIconMoon,
 .themeToggleIconSun {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   display: block;
 }
 

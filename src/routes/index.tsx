@@ -81,8 +81,8 @@ export const Route = createFileRoute("/")({
               >
                 <svg
                   className={styles.themeToggleIconMoon}
-                  width="24"
-                  height="24"
+                  width="100%"
+                  height="auto"
                   viewBox="0 0 24 24"
                   fill="none"
                   xmlns="http://www.w3.org/2000/svg"
@@ -96,8 +96,8 @@ export const Route = createFileRoute("/")({
                 </svg>
                 <svg
                   className={styles.themeToggleIconSun}
-                  width="24"
-                  height="24"
+                  width="100%"
+                  height="auto"
                   viewBox="0 0 24 24"
                   fill="none"
                   xmlns="http://www.w3.org/2000/svg"
