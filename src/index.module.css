@@ -1,3 +1,12 @@
+.container :global(:root),
+:global(:root) {
+  --ui-background: light-dark(#fff, #000);
+  --ui-foreground: light-dark(#000, #fff);
+  --ui-border: light-dark(#0001, #fff1);
+  --ui-secondary: light-dark(#0009, #fff9);
+  --ui-tertiary: light-dark(#0005, #fff5);
+}
+
 .container {
   margin-block: 8rlh;
   display: flex;
@@ -33,7 +42,7 @@
   font-family: inherit;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  border: 1px solid light-dark(#0001, #fff1);
+  border: 1px solid var(--ui-border);
   background: transparent;
   border-radius: 4px;
   cursor: pointer;
@@ -73,12 +82,6 @@
 .gridSlider {
   width: 3rlh;
 
-  /* Customizable tokens */
-  --slider-rail: light-dark(#0002, #fff2);
-  --slider-rail-fill: currentColor;
-  --slider-thumb: light-dark(#fff, #000);
-  --slider-thumb-ring: light-dark(#0002, #fff2);
-
   appearance: none;
   background: transparent;
   cursor: pointer;
@@ -87,17 +90,17 @@
 .gridSlider::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
-  background: var(--slider-rail);
+  background: var(--ui-border);
 }
 
 .gridSlider::-webkit-slider-thumb {
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
-  background: var(--slider-thumb);
-  box-shadow: 0 0 0 1px var(--slider-thumb-ring);
-  margin-top: -5px; /* center thumb on 4px track */
+  background: light-dark(var(--ui-background), var(--ui-foreground));
+  box-shadow: 0 0 0 1px var(--ui-border);
+  margin-top: -6px; /* center thumb on 4px track */
 }
 
 .gridSlider:focus-visible {
@@ -105,7 +108,7 @@
 }
 
 .gridSlider:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 3px light-dark(#0002, #fff2);
+  box-shadow: 0 0 0 3px var(--ui-border);
 }
 
 .gridValue {
@@ -125,7 +128,7 @@
   display: inline-flex;
   align-items: center;
   padding: 2px;
-  border: 1px solid light-dark(#0001, #fff0);
+  border: 1px solid var(--ui-border);
   border-radius: 999px;
   background: light-dark(rgba(255, 255, 255, 0.7), rgba(0, 0, 0, 0.1));
   backdrop-filter: blur(10px);
@@ -154,11 +157,11 @@
 }
 
 .themeToggleButton:hover {
-  background: light-dark(#0000000a, #ffffff10);
+  background: var(--ui-border);
 }
 
 .themeToggleInput:focus-visible + .themeToggleButton {
-  outline: 2px solid light-dark(#0003, #fff3);
+  outline: 2px solid var(--ui-border);
   outline-offset: 2px;
 }
 
@@ -191,12 +194,12 @@
   background-position: calc(1rlh - 1px) calc(1rlh - 1px);
   display: flex;
   flex-direction: column;
-  box-shadow: 0px 0px 0px 1px light-dark(#0002, #fff2) inset;
+  box-shadow: 0px 0px 0px 1px var(--ui-border) inset;
   & > * {
     padding: 1rlh;
     flex: 1 0 auto;
     &:not(:first-child) {
-      box-shadow: 0px 1px 0px 0 light-dark(#0001, #fff1) inset;
+      box-shadow: 0px 1px 0px 0 var(--ui-border) inset;
     }
   }
 }
