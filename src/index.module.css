@@ -1,17 +1,88 @@
 .container {
-  margin-top: 5rlh;
+  margin-block: 8rlh;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 32px;
   font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
-  color: "currentColor";
+  color: currentColor;
   h1 {
     font-size: 3rlh;
     margin: 0;
     padding: 0;
     text-transform: uppercase;
   }
+}
+
+.controlsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.stateButtons {
+  display: flex;
+  gap: 0;
+}
+
+.stateButton {
+  padding: 6px 14px;
+  font-size: 11px;
+  font-family: inherit;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: inherit;
+}
+
+.stateButton[data-active="true"] {
+  border-color: currentColor;
+  background: currentColor;
+}
+
+.stateButtonLabel {
+  opacity: 0.5;
+}
+
+.stateButton[data-active="true"] .stateButtonLabel {
+  mix-blend-mode: difference;
+  color: #fff;
+  opacity: 1;
+}
+
+.gridControl {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-family: inherit;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.85;
+}
+
+.gridSlider {
+  width: 120px;
+  accent-color: currentColor;
+}
+
+.gridValue {
+  min-width: 1.2em;
+  text-align: right;
+}
+
+.propsRow {
+  display: flex;
+  gap: 0.5rlh;
+  max-width: 48rlh;
 }
 
 .themeToggle {
