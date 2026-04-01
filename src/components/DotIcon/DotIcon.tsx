@@ -1,6 +1,7 @@
 import { useRef, useEffect, useMemo } from "react";
 import type { CSSProperties } from "react";
 import { motionValue, useTime, useMotionValueEvent } from "motion/react";
+import { isDevDotIconStateEnabled } from "#/env";
 import { DotCircle, type DotMV } from "./DotCircle";
 
 // ─── 3D ENGINE ───────────────────────────────────────────────────────────────
@@ -389,7 +390,14 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   };
 };
 
-export const STATE_KEYS = Object.keys(STATE_META) as StateKey[];
+const ALL_STATE_KEYS = Object.keys(STATE_META) as StateKey[];
+
+/** Keys shown in UI; omits `dev` in production unless env allows it. */
+export const STATE_KEYS = (
+  isDevDotIconStateEnabled
+    ? ALL_STATE_KEYS
+    : ALL_STATE_KEYS.filter((k) => k !== "dev")
+) as StateKey[];
 
 export const getStateLabel = (key: StateKey): string => STATE_META[key].label;
 
@@ -421,8 +429,10 @@ const DotIcon = ({
 }) => {
   const time = useTime();
   const phaseStartMsRef = useRef(0);
-  const stateRef = useRef<StateKey>(state);
-  stateRef.current = state;
+  const effectiveState: StateKey =
+    state === "dev" && !isDevDotIconStateEnabled ? "dormant" : state;
+  const stateRef = useRef<StateKey>(effectiveState);
+  stateRef.current = effectiveState;
 
   const config = useMemo(() => buildGridConfig(grid), [grid]);
   const states = useMemo(() => buildStates(config), [config]);
@@ -446,7 +456,7 @@ const DotIcon = ({
 
   if (!targetsRef.current || gridRef.current !== grid) {
     gridRef.current = grid;
-    const def = states[state];
+    const def = states[effectiveState];
     const proj = def.layout(0).map((v) => project(v, config));
     const opa = resolveOpacities(def.opacities, {
       layoutAngle: 0,
@@ -468,11 +478,11 @@ const DotIcon = ({
   useEffect(() => {
     phaseStartMsRef.current = time.get();
     opacityTransitionRef.current = {
-      state,
+      state: effectiveState,
       startMs: time.get(),
       from: targetsRef.current!.map((mv) => mv.opacity.get()),
     };
-  }, [state, time]);
+  }, [effectiveState, time]);
 
   useMotionValueEvent(time, "change", (ms) => {
     const key = stateRef.current;
