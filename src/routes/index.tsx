@@ -159,7 +159,7 @@ export const Route = createFileRoute("/")({
             </ExposeProps>
           </div>
         </div>
-        <Shader color={"#f00"} color2={"#00f"} />
+        <Shader color={"#1E91AF"} color2={"#F7ED2C"} />
       </>
     );
   },

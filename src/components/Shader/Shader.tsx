@@ -34,9 +34,9 @@ export const SHADER_TUNING = {
   animationTimeScale: 1,
 
   /** Domain warp: UV frequency inside simplex (higher = smaller / finer warp cells). */
-  warpUvScale: 1.9, // default: 1.1
+  warpUvScale: 1.6, // default: 1.1
   /** How strongly UV is pushed by warp noise (mesh “liquidity”). */
-  warpStrength: 0.21, // default: 0.24
+  warpStrength: 0.18, // default: 0.24
   /** Time drift on warp noise (x+, y+, x−, y− channels). */
   warpTimeX1: 0.14, // default: 0.14
   warpTimeY1: 0.09, // default: 0.09
@@ -51,13 +51,13 @@ export const SHADER_TUNING = {
   /** Keep blobs away from UV edges [0–0.5]. */
   blobAreaInset: 0.35, // default: 0.12
   /** Orbit radius in UV space [0–1]. */
-  blobAreaRadius: 0.2, // default: 0.76
+  blobAreaRadius: 0.1, // default: 0.76
   /** Gaussian tightness `exp(-k * d²)` — higher = smaller, sharper blobs. */
   blobGaussianTightness: 5, // default: 3.8
 
   /** Mesh color stops: mix factors toward color2 for the two in-between samples. */
-  meshMixTowardColor2A: 0.3, // default: 0.32
-  meshMixTowardColor2B: 0.7, // default: 0.68
+  meshMixTowardColor2A: 0.4, // default: 0.32
+  meshMixTowardColor2B: 0.6, // default: 0.68
   /** Bright “core” tint: multiply midpoint RGB (highlights). */
   highlightIntensity: 1, // default: 1.14
   /** How much highlight is mixed in near strongest blobs [0–1]. */
@@ -78,18 +78,18 @@ export const SHADER_TUNING = {
   grainStrength: 0.055, // default: 0.055
 
   /** Alpha blob: floor + range * peak^power (shape of opaque regions). */
-  alphaBlobFloor: 0.2, // default: 0.2
+  alphaBlobFloor: 0.3, // default: 0.2
   alphaBlobRange: 0.8, // default: 0.8
-  alphaPeakPower: 0.3, // default: 0.52
+  alphaPeakPower: 0.12, // default: 0.52
   /** Fade alpha when far from all blobs (smoothstep edges). */
-  alphaTroughFadeStart: 0.01, // default: 0.08
-  alphaTroughFadeEnd: 0.59, // default: 0.58
+  alphaTroughFadeStart: 0.2, // default: 0.08
+  alphaTroughFadeEnd: 0.9, // default: 0.58
 
   /**
    * How much RGB luminance drives opacity (0 = off, 1 = strong).
    * Brighter colors read as more opaque; dark mixes stay more transparent.
    */
-  colorLuminanceToAlpha: 0.1, // default: 0.22
+  colorLuminanceToAlpha: 0.4, // default: 0.22
 
   /**
    * Vertical linear mask (UV space: 0 = bottom of canvas, 1 = top).
@@ -100,7 +100,7 @@ export const SHADER_TUNING = {
   verticalMaskYTop: 1,
 
   /** Blending space for all color mixes — see `COLOR_MIX_SPACE`. */
-  colorMixSpace: COLOR_MIX_SPACE.HSL,
+  colorMixSpace: COLOR_MIX_SPACE.SRGB,
 } as const;
 
 export type ShaderTuning = typeof SHADER_TUNING;
@@ -423,7 +423,7 @@ const parseSpeed = (speed: string): number => {
 const compileShader = (
   gl: WebGLRenderingContext,
   type: number,
-  source: string
+  source: string,
 ): WebGLShader | null => {
   const shader = gl.createShader(type);
   if (!shader) return null;
@@ -440,7 +440,7 @@ const compileShader = (
 const applyShaderTuning = (
   gl: WebGLRenderingContext,
   program: WebGLProgram,
-  tuning: ShaderTuning
+  tuning: ShaderTuning,
 ) => {
   const loc = (name: string) => gl.getUniformLocation(program, name);
 
@@ -469,7 +469,7 @@ const applyShaderTuning = (
     tuning.warpTimeX1,
     tuning.warpTimeY1,
     tuning.warpTimeX2,
-    tuning.warpTimeY2
+    tuning.warpTimeY2,
   );
   set1f("u_warp2TimeScale", tuning.warpSecondPassTimeScale);
   set1f("u_warp2Phase", tuning.warpSecondPassPhase);
@@ -482,7 +482,7 @@ const applyShaderTuning = (
   set2f(
     "u_meshMixAB",
     tuning.meshMixTowardColor2A,
-    tuning.meshMixTowardColor2B
+    tuning.meshMixTowardColor2B,
   );
   set1f("u_hiBoost", tuning.highlightIntensity);
   set1f("u_hiMix", tuning.highlightMix);
@@ -499,12 +499,12 @@ const applyShaderTuning = (
     "u_alphaShape",
     tuning.alphaBlobFloor,
     tuning.alphaBlobRange,
-    tuning.alphaPeakPower
+    tuning.alphaPeakPower,
   );
   set2f(
     "u_alphaTrough",
     tuning.alphaTroughFadeStart,
-    tuning.alphaTroughFadeEnd
+    tuning.alphaTroughFadeEnd,
   );
   set1f("u_lumaToAlpha", tuning.colorLuminanceToAlpha);
   set2f("u_verticalMask", tuning.verticalMaskYBottom, tuning.verticalMaskYTop);
@@ -516,7 +516,7 @@ const applyShaderTuning = (
 const createProgram = (
   gl: WebGLRenderingContext,
   vertSrc: string,
-  fragSrc: string
+  fragSrc: string,
 ): WebGLProgram | null => {
   const vert = compileShader(gl, gl.VERTEX_SHADER, vertSrc);
   const frag = compileShader(gl, gl.FRAGMENT_SHADER, fragSrc);
@@ -543,7 +543,7 @@ export const Shader = ({
   color = "var(--accent)",
   color2 = "var(--accent-1)",
   speed = "35s",
-  opacity = 0.32,
+  opacity = 1,
   className,
 }: ShaderProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -600,7 +600,7 @@ export const Shader = ({
     gl.bufferData(
       gl.ARRAY_BUFFER,
       new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
-      gl.STATIC_DRAW
+      gl.STATIC_DRAW,
     );
 
     const aPosition = gl.getAttribLocation(program, "a_position");

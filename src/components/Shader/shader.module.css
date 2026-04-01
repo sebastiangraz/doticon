@@ -1,14 +1,16 @@
 .canvas {
   position: absolute;
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
   top: 0;
   left: 0;
-  width: 100vw;
+  width: 100%;
   overflow: clip;
-  height: 60vh;
+  height: 100vh;
+  min-height: 1080px;
   opacity: 1;
   transition: opacity 0.35s ease-out;
+  background: linear-gradient(to bottom, #e1f0e1, #fff);
 }
 
 .resizeHidden {
