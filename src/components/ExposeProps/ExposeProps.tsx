@@ -49,10 +49,7 @@ export const ExposeProps = ({
         const isSpan = child.type === "span";
 
         return (
-          <div
-            key={index}
-            style={{ display: "flex", flexDirection: "column", gap: 4 }}
-          >
+          <div key={index} style={{ display: "flex", flexDirection: "column" }}>
             <div>{child}</div>
             <span style={{ opacity: 0.5 }}>
               {!isSpan && "<"}

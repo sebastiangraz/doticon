@@ -18,10 +18,11 @@ export const Route = createFileRoute("/")({
       <>
         <div className={styles.container}>
           <svg
-            width="32"
+            width="24"
             viewBox="0 0 140 140"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
+            id="logo"
           >
             <path
               fillRule="evenodd"
@@ -30,8 +31,9 @@ export const Route = createFileRoute("/")({
               fill="currentColor"
             />
           </svg>
-          <DotIcon size={100} state={icon3dState} grid={gridSize} />
+
           <div className={styles.controlsRow}>
+            <DotIcon size={48} state={icon3dState} grid={gridSize} />
             <div className={styles.stateButtons}>
               {STATE_KEYS.map((key: StateKey) => {
                 const active = icon3dState === key;
@@ -50,6 +52,7 @@ export const Route = createFileRoute("/")({
                 );
               })}
             </div>
+            <div className={styles.separator}></div>
             <label htmlFor="doticon-grid-size" className={styles.gridControl}>
               Grid
               <input
