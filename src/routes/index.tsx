@@ -9,9 +9,6 @@ import DotIcon, {
 import { Shader } from "#/components/Shader/Shader";
 import styles from "../index.module.css";
 
-const GRID_SLIDER_MIN = 2;
-const GRID_SLIDER_MAX = 13;
-
 export const Route = createFileRoute("/")({
   component: () => {
     const [icon3dState, setIcon3dState] = useState<StateKey>("dormant");
@@ -19,19 +16,6 @@ export const Route = createFileRoute("/")({
 
     return (
       <>
-        <div className={styles.themeToggle}>
-          <label
-            className={styles.themeToggleLabel}
-            htmlFor="theme-mode-toggle"
-          >
-            Dark
-          </label>
-          <input
-            className={styles.themeToggleInput}
-            id="theme-mode-toggle"
-            type="checkbox"
-          />
-        </div>
         <div className={styles.container}>
           <svg
             width="32"
@@ -71,8 +55,8 @@ export const Route = createFileRoute("/")({
               <input
                 id="doticon-grid-size"
                 type="range"
-                min={GRID_SLIDER_MIN}
-                max={GRID_SLIDER_MAX}
+                min={3}
+                max={5}
                 value={gridSize}
                 onChange={(e) =>
                   setGridSize(Number.parseInt(e.target.value, 10))
@@ -83,6 +67,19 @@ export const Route = createFileRoute("/")({
                 {gridSize}×{gridSize}
               </span>
             </label>
+            <div className={styles.themeToggle}>
+              <label
+                className={styles.themeToggleLabel}
+                htmlFor="theme-mode-toggle"
+              >
+                Dark
+              </label>
+              <input
+                className={styles.themeToggleInput}
+                id="theme-mode-toggle"
+                type="checkbox"
+              />
+            </div>
           </div>
           <div className={styles.propsRow}>
             <ExposeProps className={styles.prop}>
