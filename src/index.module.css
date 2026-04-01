@@ -86,30 +86,64 @@
 }
 
 .themeToggle {
-  top: 16px;
-  right: 16px;
   z-index: 10;
   display: inline-flex;
   align-items: center;
-  border: 1px solid light-dark(#0001, #fff1);
+  padding: 2px;
+  /* border: 1px solid light-dark(#0001, #fff1); */
   border-radius: 999px;
-  background: light-dark(rgba(255, 255, 255, 0.7), rgba(0, 0, 0, 0.35));
+  background: light-dark(rgba(255, 255, 255, 0.7), rgba(0, 0, 0, 0.1));
   backdrop-filter: blur(10px);
 }
 
-.themeToggleLabel {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0.85;
-  user-select: none;
-  padding: 8px 8px 8px 12px;
+.themeToggleInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.themeToggleInput {
-  margin: 0;
-  margin-right: 12px;
-  accent-color: currentColor;
+.themeToggleButton {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+  color: currentColor;
+  transition:
+    background-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.themeToggleButton:hover {
+  background: light-dark(#0000000a, #ffffff10);
+}
+
+.themeToggleInput:focus-visible + .themeToggleButton {
+  outline: 2px solid light-dark(#0003, #fff3);
+  outline-offset: 2px;
+}
+
+.themeToggleIconMoon,
+.themeToggleIconSun {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.themeToggleIconSun {
+  display: none;
+}
+
+.themeToggleInput:checked + .themeToggleButton .themeToggleIconMoon {
+  display: none;
+}
+
+.themeToggleInput:checked + .themeToggleButton .themeToggleIconSun {
+  display: block;
 }
 .prop {
   --sizeX: 1rlh;
