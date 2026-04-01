@@ -187,7 +187,17 @@ const buildLoadingOrder = (
 
 // ─── STATE SYSTEM ────────────────────────────────────────────────────────────
 
-export type StateKey = "dormant" | "thinking" | "loading" | "dev";
+// Single source of truth for all states. Adding a new state only requires:
+// 1. An entry here (gives you StateKey, STATE_KEYS, and the label for free)
+// 2. An entry in buildStates (layout + opacity logic)
+const STATE_META = {
+  dormant: { label: "Dormant" },
+  thinking: { label: "Thinking" },
+  loading: { label: "Loading" },
+  dev: { label: "Dev" },
+} as const;
+
+export type StateKey = keyof typeof STATE_META;
 
 type OpacitySolveCtx = { layoutAngle: number; opacityAngle: number };
 
@@ -344,19 +354,19 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
 
   return {
     dev: {
-      label: "Dev",
+      label: STATE_META.dev.label,
       layout: () => devLayout(config),
       opacities: Array.from({ length: config.dotCount }, () => 1),
       animated: false,
     },
     dormant: {
-      label: "Dormant",
+      label: STATE_META.dormant.label,
       layout: () => dormantLayout(config),
       opacities: dormantOpacities,
       animated: false,
     },
     thinking: {
-      label: "Thinking",
+      label: STATE_META.thinking.label,
       layout: (angle = 0) => thinkingLayout(config, sphereBase, angle),
       opacities: (ctx) =>
         thinkingOpacities(
@@ -370,7 +380,7 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       opacitySpeed: 4,
     },
     loading: {
-      label: "Loading",
+      label: STATE_META.loading.label,
       layout: (angle = 0) => loadingLayout(config, dotRank, angle),
       opacities: (ctx) => loadingOpacities(config, dotRank, ctx.opacityAngle),
       animated: true,
@@ -379,16 +389,9 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   };
 };
 
-export const STATE_KEYS: StateKey[] = ["dormant", "thinking", "loading", "dev"];
+export const STATE_KEYS = Object.keys(STATE_META) as StateKey[];
 
-const STATE_LABELS: Record<StateKey, string> = {
-  dormant: "Dormant",
-  thinking: "Thinking",
-  loading: "Loading",
-  dev: "Dev",
-};
-
-export const getStateLabel = (key: StateKey): string => STATE_LABELS[key];
+export const getStateLabel = (key: StateKey): string => STATE_META[key].label;
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
