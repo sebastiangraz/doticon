@@ -21,6 +21,16 @@ export const Route = createFileRoute("/")({
 
     return (
       <>
+        <div className={styles.themeToggle}>
+          <label className={styles.themeToggleLabel} htmlFor="theme-mode-toggle">
+            Dark
+          </label>
+          <input
+            className={styles.themeToggleInput}
+            id="theme-mode-toggle"
+            type="checkbox"
+          />
+        </div>
         <div
           className={styles.container}
           style={{

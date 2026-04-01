@@ -1,9 +1,19 @@
+/* Default to light; CSS toggle flips to dark. */
+:root {
+  color-scheme: light;
+}
+
+/* Pure CSS theme switcher: checkbox in the DOM controls color-scheme. */
+:root:has(#theme-mode-toggle:checked) {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   padding: 0;
   font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
-  background-color: #fff;
-  /* background: #000; */
+  background: light-dark(white, black);
+  color: light-dark(black, white);
 }
 * {
   box-sizing: border-box;
