@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import ExposeProps from "#/components/ExposeProps/ExposeProps";
 import DotIcon, {
@@ -13,6 +13,35 @@ export const Route = createFileRoute("/")({
   component: () => {
     const [icon3dState, setIcon3dState] = useState<StateKey>("dormant");
     const [gridSize, setGridSize] = useState(4);
+    const dotIconWrapRef = useRef<HTMLDivElement | null>(null);
+    const [didCopy, setDidCopy] = useState(false);
+
+    const copyCurrentDotIconSvg = async () => {
+      const svg = dotIconWrapRef.current?.querySelector("svg");
+      if (!svg) return;
+
+      const svgText = new XMLSerializer().serializeToString(svg);
+
+      try {
+        await navigator.clipboard.writeText(svgText);
+        setDidCopy(true);
+        window.setTimeout(() => setDidCopy(false), 900);
+      } catch {
+        // Fallback path for browsers/environments without clipboard permissions.
+        const ta = document.createElement("textarea");
+        ta.value = svgText;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        ta.style.top = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        setDidCopy(true);
+        window.setTimeout(() => setDidCopy(false), 900);
+      }
+    };
 
     return (
       <>
@@ -31,9 +60,17 @@ export const Route = createFileRoute("/")({
               fill="currentColor"
             />
           </svg>
-
           <div className={styles.controlsRow}>
-            <DotIcon size={80} state={icon3dState} grid={gridSize} />
+            <div className={styles.dotIconWrap} ref={dotIconWrapRef}>
+              <DotIcon size={100} state={icon3dState} grid={gridSize} />
+              <button
+                type="button"
+                className={styles["dotIconCopyButton"]}
+                onClick={copyCurrentDotIconSvg}
+              >
+                {didCopy ? "COPIED" : "COPY"}
+              </button>
+            </div>
             <div className={styles.stateButtons}>
               {STATE_KEYS.map((key: StateKey) => {
                 const active = icon3dState === key;
@@ -58,7 +95,7 @@ export const Route = createFileRoute("/")({
               <input
                 id="doticon-grid-size"
                 type="range"
-                min={2}
+                min={3}
                 max={7}
                 value={gridSize}
                 onChange={(e) =>
@@ -146,7 +183,10 @@ export const Route = createFileRoute("/")({
                 <DotIcon size={16} state={"loading"} grid={3} />
               </ExposeProps>
             </div>
-          </div>
+          </div>{" "}
+          <p className={styles.copyright}>
+            © STACKS {new Date().getFullYear()} &middot; All rights reserved
+          </p>
         </div>
         <Shader color={"#1E91AF"} color2={"#F7ED2C"} />
       </>

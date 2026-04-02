@@ -15,7 +15,7 @@ const formatProps = (props: any, ignoreProps: string[]): React.ReactNode => {
       return (
         <span key={key}>
           <span>{`${key}="`}</span>
-          <span style={{ opacity: 0.5 }}>
+          <span className={"propValue"}>
             <span>{value.toString()}</span>
           </span>
           &quot;
@@ -51,7 +51,7 @@ export const ExposeProps = ({
         return (
           <div key={index} style={{ display: "flex", flexDirection: "column" }}>
             <div>{child}</div>
-            <span style={{ opacity: 0.5 }}>
+            <span>
               {!isSpan && "<"}
               {child.type.displayName || child.type.name}{" "}
               {formatProps(child.props, ignoreProps)}

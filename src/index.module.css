@@ -4,6 +4,7 @@
   --ui-foreground: light-dark(hsla(0, 0%, 0%, 1), hsla(0, 0%, 100%, 1));
   --ui-border: light-dark(hsla(0, 0%, 0%, 0.1), hsla(0, 0%, 100%, 0.06));
   --ui-secondary: light-dark(hsla(0, 0%, 0%, 0.64), hsla(0, 0%, 100%, 0.56));
+  --ui-tertiary: light-dark(hsla(0, 0%, 0%, 0.32), hsla(0, 0%, 100%, 0.24));
 }
 
 .container {
@@ -35,6 +36,55 @@
   width: 100%;
   gap: 2rlh;
   padding-block: 3rlh;
+}
+
+.dotIconWrap {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0;
+  padding: 10px 10px 22px;
+}
+
+.dotIconWrap:hover,
+.dotIconWrap:focus-within {
+  outline-color: var(--ui-border);
+}
+
+.dotIconCopyButton {
+  position: absolute;
+  appearance: none;
+  background: transparent;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  opacity: 0;
+  pointer-events: none;
+  border: none;
+  padding: 8px 10px;
+  font-size: 0.55rlh;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  color: var(--ui-tertiary);
+
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease,
+    color 0.12s ease;
+}
+
+.dotIconWrap:hover .dotIconCopyButton,
+.dotIconWrap:focus-within .dotIconCopyButton {
+  opacity: 1;
+  transform: translateX(-50%) translateY(4px);
+  pointer-events: auto;
+}
+
+.dotIconCopyButton:hover {
+  color: var(--ui-secondary);
 }
 
 .separator {
@@ -151,23 +201,6 @@
   text-align: right;
 }
 
-.propsRow {
-  display: flex;
-  gap: 1rlh;
-  user-select: none;
-}
-
-.propsColumn {
-  & > :first-child {
-    margin-bottom: 1rlh;
-    /* & > * {
-      justify-content: center;
-      align-items: center;
-      display: flex;
-    } */
-  }
-}
-
 .themeToggle {
   z-index: 10;
   display: inline-flex;
@@ -230,6 +263,19 @@
 .themeToggleInput:checked + .themeToggleButton .themeToggleIconSun {
   display: block;
 }
+
+.propsRow {
+  display: flex;
+  gap: 1rlh;
+  user-select: none;
+}
+
+.propsColumn {
+  & > :first-child {
+    margin-bottom: 1rlh;
+  }
+}
+
 .prop {
   --sizeX: 1rlh;
   --sizeY: 1rlh;
@@ -241,8 +287,12 @@
   flex-direction: column;
   box-shadow: 0px 0px 0px 1px var(--ui-border) inset;
   span {
+    color: var(--ui-tertiary);
     line-height: 1.5;
     font-size: 0.6rlh;
+  }
+
+  :global(.propValue span) {
     color: var(--ui-secondary);
   }
   & > * {
@@ -253,4 +303,11 @@
       box-shadow: 0px 1px 0px 0 var(--ui-border) inset;
     }
   }
+}
+
+.copyright {
+  font-size: 0.6rlh;
+  color: var(--ui-tertiary);
+  text-align: center;
+  margin-top: 2rlh;
 }
