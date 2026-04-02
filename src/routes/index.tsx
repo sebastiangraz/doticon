@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import ExposeProps from "#/components/ExposeProps/ExposeProps";
 import DotIcon, {
@@ -13,8 +13,17 @@ export const Route = createFileRoute("/")({
   component: () => {
     const [icon3dState, setIcon3dState] = useState<StateKey>("dormant");
     const [gridSize, setGridSize] = useState(4);
+    const [gridSizeInput, setGridSizeInput] = useState(gridSize);
     const dotIconWrapRef = useRef<HTMLDivElement | null>(null);
     const [didCopy, setDidCopy] = useState(false);
+
+    useEffect(() => {
+      const t = window.setTimeout(() => {
+        setGridSize(gridSizeInput);
+      }, 140);
+
+      return () => window.clearTimeout(t);
+    }, [gridSizeInput]);
 
     const copyCurrentDotIconSvg = async () => {
       const svg = dotIconWrapRef.current?.querySelector("svg");
@@ -97,14 +106,14 @@ export const Route = createFileRoute("/")({
                 type="range"
                 min={3}
                 max={7}
-                value={gridSize}
+                value={gridSizeInput}
                 onChange={(e) =>
-                  setGridSize(Number.parseInt(e.target.value, 10))
+                  setGridSizeInput(Number.parseInt(e.target.value, 10))
                 }
                 className={styles.gridSlider}
               />
               <span className={styles.gridValue}>
-                {gridSize}×{gridSize}
+                {gridSizeInput}×{gridSizeInput}
               </span>
             </label>
             <div className={styles.themeToggle}>
