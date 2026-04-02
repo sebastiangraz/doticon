@@ -161,6 +161,7 @@ export const Route = createFileRoute("/")({
                 <DotIcon size={32} state={"dormant"} />
                 <DotIcon size={24} state={"dormant"} />
                 <DotIcon size={16} state={"dormant"} grid={3} />
+                <DotIcon size={12} state={"dormant"} grid={3} />
               </ExposeProps>
             </div>
             <div className={styles.propsColumn}>
@@ -171,6 +172,7 @@ export const Route = createFileRoute("/")({
                 <DotIcon size={32} state={"thinking"} />
                 <DotIcon size={24} state={"thinking"} />
                 <DotIcon size={16} state={"thinking"} grid={3} />
+                <DotIcon size={12} state={"thinking"} grid={3} />
               </ExposeProps>
             </div>
             <div className={styles.propsColumn}>
@@ -181,6 +183,7 @@ export const Route = createFileRoute("/")({
                 <DotIcon size={32} state={"loading"} />
                 <DotIcon size={24} state={"loading"} />
                 <DotIcon size={16} state={"loading"} grid={3} />
+                <DotIcon size={12} state={"loading"} grid={3} />
               </ExposeProps>
             </div>
           </div>{" "}
