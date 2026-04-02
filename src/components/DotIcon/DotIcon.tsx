@@ -14,7 +14,7 @@ type Vec3 = { x: number; y: number; z: number };
 // same regardless of how many columns the grid has. Editable for tuning.
 
 // const DOT_SIZES = [6, 8, 12, 16] as const;
-const DOT_SIZES = [8, 10, 14, 16] as const;
+const DOT_SIZES = [6, 8, 12, 16, 20] as const;
 
 // Pure coordinate-system description. Contains no state-specific data —
 // adding or removing a state never requires changing this type.
@@ -44,8 +44,11 @@ const VIEW_SIZE = 100;
 const SVG_PAD = 14;
 const SVG_SPAN = VIEW_SIZE - 2 * SVG_PAD;
 
-const snapSize = (z: number, config: GridConfig): number => {
-  const t = (z - config.grid.min) / (config.grid.max - config.grid.min);
+// Z lives in [0, DOT_SIZES.length - 1] — the same index space as DOT_SIZES itself,
+// independent of the XY grid size. This lets any layout assign Z as a direct size
+// index (e.g. DORMANT_4x4_Z values 0–4) without hitting grid-range mismatches.
+const snapSize = (z: number): number => {
+  const t = z / (DOT_SIZES.length - 1);
   const idx = Math.round(Math.max(0, Math.min(1, t)) * (DOT_SIZES.length - 1));
   return DOT_SIZES[idx];
 };
@@ -59,7 +62,7 @@ const project = (v: Vec3, config: GridConfig): Projected => ({
   sy:
     SVG_PAD +
     ((v.y - config.grid.min) / (config.grid.max - config.grid.min)) * SVG_SPAN,
-  size: snapSize(v.z, config),
+  size: snapSize(v.z),
   z: v.z,
 });
 
@@ -223,19 +226,18 @@ const resolveOpacities = (o: Opacities, ctx: OpacitySolveCtx): number[] =>
 // ─── Layout / opacity functions ───────────────────────────────────────────────
 
 // Inverse grid-density Z: smaller grids → higher Z (larger dots), larger grids
-// → lower Z (smaller dots). Steps through DOT_SIZES largest→smallest as n
-// grows, skipping n=4 (which has its own per-dot override). Back-solves to the
-// Z value that snapSize will correctly round back to the target size index.
-// Adapts automatically if DOT_SIZES gains or loses entries.
+// → lower Z (smaller dots). Returns a direct DOT_SIZES index (Z coordinate in
+// the [0, DOT_SIZES.length-1] space). Adapts automatically if DOT_SIZES
+// gains or loses entries.
 //
-// n ≤ 3 → step 0 (DOT_SIZES max)
-// n = 5 → step 1
-// n = 6 → step 2
-// n ≥ 7 → step 3+ (clamped to DOT_SIZES min)
+// n ≤ 3 → step 0 (DOT_SIZES max index)
+// n = 4 → step 1
+// n = 5 → step 2
+// n = 6 → step 3
+// n ≥ 7 → step 4+ (clamped to DOT_SIZES min index)
 const gridBaseZ = (config: GridConfig): number => {
-  const step = config.n <= 3 ? 0 : config.n - 4;
-  const sizeIdx = Math.max(0, DOT_SIZES.length - 1 - step);
-  return Math.round((sizeIdx / (DOT_SIZES.length - 1)) * config.grid.max);
+  const step = Math.max(0, config.n - 3);
+  return Math.max(0, DOT_SIZES.length - 1 - step);
 };
 
 // Dormant: all dots at baseZ (static logo pattern; opacity carries the design).
@@ -310,14 +312,14 @@ const loadingTimeSinceFill = (
   return (angle - rank) % cycle;
 };
 
-// Loading: fill front at baseZ, trail falls to baseZ - 2 (clamped to grid.min).
+// Loading: fill front at baseZ, trail falls to baseZ - 2 (clamped to 0).
 const loadingLayout = (
   config: GridConfig,
   dotRank: number[],
   angle = 0,
 ): Vec3[] => {
   const baseZ = gridBaseZ(config) + 0.5;
-  const trailZ = Math.max(config.grid.min, baseZ - 2);
+  const trailZ = Math.max(0, baseZ - 2);
   const cycle = config.dotCount + LOADING_PAUSE;
   const trailSteps = config.dotCount - 1;
   return Array.from({ length: config.dotCount }, (_, i) => {

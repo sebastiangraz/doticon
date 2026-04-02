@@ -8,9 +8,9 @@ An N×N dot grid (controlled by the `grid` prop, default 4) treated as vertices 
 
 Orthographic projection — drops Z, maps X/Y linearly into the SVG viewBox sized by `VIEW_SIZE` (100) with padding `SVG_PAD` (14). `SVG_SPAN = VIEW_SIZE - 2 * SVG_PAD`. No perspective division. Coordinates accept decimals for smooth morphing between layouts.
 
-Z → dot size: `DOT_SIZES = [6, 8, 12, 16]` (back → front, independent of grid size). `snapSize(z, config)` maps a Z coordinate into this chart by normalising Z over the grid range and rounding to the nearest size index. Dot radius = `snapSize(z) / 2`, then smoothed at render time by per-dot Motion springs.
+Z → dot size: `DOT_SIZES = [6, 8, 12, 16]` (back → front, independent of grid size). Z lives in `[0, DOT_SIZES.length - 1]` — the same index space as `DOT_SIZES` itself, decoupled from the XY grid range. `snapSize(z)` normalises Z over `[0, DOT_SIZES.length - 1]` and rounds to the nearest size index. Dot radius = `snapSize(z) / 2`, then smoothed at render time by per-dot Motion springs.
 
-**`gridBaseZ(config)`** — inverse grid-density sizing. Smaller grids → higher Z (larger dots), larger grids → lower Z (smaller dots). `step = n <= 3 ? 0 : n - 4`, then back-solves to the Z value that `snapSize` will round to the correct `DOT_SIZES` index. This keeps dots visually proportional regardless of grid resolution.
+**`gridBaseZ(config)`** — inverse grid-density sizing. Smaller grids → higher Z (larger dots), larger grids → lower Z (smaller dots). Returns a direct `DOT_SIZES` index: `step = Math.max(0, n - 3)`, `baseZ = max(0, DOT_SIZES.length - 1 - step)`. No back-solve needed since Z and DOT_SIZES share the same index space. This keeps dots visually proportional regardless of grid resolution.
 
 Paint order: no depth-based paint ordering (no Z-sort). SVG circles render in stable index order.
 
