@@ -29,10 +29,11 @@
 }
 
 .controlsRow {
-  max-width: 720px;
+  /* max-width: 720px; */
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: left;
+  justify-content: center;
   width: 100%;
   gap: 2rlh;
   padding-block: 3rlh;
@@ -87,19 +88,12 @@
   color: var(--ui-secondary);
 }
 
-.separator {
-  width: 1px;
-  height: 100%;
-  background: var(--ui-border);
-  flex: 1 0 auto;
-}
 .stateButtons {
   display: flex;
   border: 1px solid var(--ui-border);
   gap: 0;
   overflow: clip;
   border-radius: 5px;
-  margin-right: 2rlh;
 }
 
 .stateButton {

@@ -272,12 +272,21 @@ const thinkingLayout = (
   return sphereBase.map((pt) => {
     const r = rotateY(pt, angle);
     return {
-      x: config.grid.center + r.x * config.grid.center,
-      y: config.grid.center + r.y * config.grid.center,
-      z: baseZ * (0.5 + 0.5 * r.z),
+      x:
+        config.grid.center +
+        r.x * config.grid.center * THINKING_SPHERE_OVERSHOOT,
+      y:
+        config.grid.center +
+        r.y * config.grid.center * THINKING_SPHERE_OVERSHOOT,
+      z: baseZ * (0.5 + 0.6 * r.z),
     };
   });
 };
+
+// XY-only scale for the sphere — values > 1 push dots beyond the grid boundary
+// (SVG overflow: visible so they stay visible). Z is untouched so dot sizes
+// remain governed by DOT_SIZES regardless of scale.
+const THINKING_SPHERE_OVERSHOOT = 1.1; // Default: 1
 
 const THINKING_OPACITY_MIN = 0.12;
 const THINKING_OPACITY_MAX = 1;
@@ -300,7 +309,7 @@ const thinkingOpacities = (
     return clamp(wave * depthVisible, 0, 1);
   });
 
-const LOADING_PAUSE = 4;
+const LOADING_PAUSE = 3;
 const LOADING_FILLED_OPACITY_MIN = 0.12;
 
 const loadingTimeSinceFill = (
@@ -318,7 +327,7 @@ const loadingLayout = (
   dotRank: number[],
   angle = 0,
 ): Vec3[] => {
-  const baseZ = gridBaseZ(config) + 0.5;
+  const baseZ = gridBaseZ(config);
   const trailZ = Math.max(0, baseZ - 2);
   const cycle = config.dotCount + LOADING_PAUSE;
   const trailSteps = config.dotCount - 1;

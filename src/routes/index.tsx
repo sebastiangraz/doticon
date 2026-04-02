@@ -72,6 +72,7 @@ export const Route = createFileRoute("/")({
           <div className={styles.controlsRow}>
             <div className={styles.dotIconWrap} ref={dotIconWrapRef}>
               <DotIcon size={100} state={icon3dState} grid={gridSize} />
+
               <button
                 type="button"
                 className={styles["dotIconCopyButton"]}
@@ -79,7 +80,8 @@ export const Route = createFileRoute("/")({
               >
                 {didCopy ? "COPIED" : "COPY"}
               </button>
-            </div>
+            </div>{" "}
+            <DotIcon size={20} state={icon3dState} grid={gridSize} />
             <div className={styles.stateButtons}>
               {STATE_KEYS.map((key: StateKey) => {
                 const active = icon3dState === key;
@@ -98,7 +100,7 @@ export const Route = createFileRoute("/")({
                 );
               })}
             </div>
-            <div className={styles.separator}></div>
+            <div />
             <label htmlFor="doticon-grid-size" className={styles.gridControl}>
               Grid
               <input
