@@ -98,7 +98,7 @@
   border: 1px solid var(--ui-border);
   gap: 0;
   overflow: clip;
-  border-radius: 4px;
+  border-radius: 5px;
   margin-right: 2rlh;
 }
 
@@ -173,19 +173,19 @@
 }
 
 .gridSlider::-webkit-slider-runnable-track {
-  height: 4px;
+  height: 1px;
   border-radius: 999px;
   background: var(--ui-border);
 }
 
 .gridSlider::-webkit-slider-thumb {
   appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   border-radius: 999px;
   background: light-dark(var(--ui-background), var(--ui-foreground));
   box-shadow: 0 0 0 1px var(--ui-border);
-  margin-top: -6px; /* center thumb on 4px track */
+  margin-top: -7px; /* center thumb on 4px track */
 }
 
 .gridSlider:focus-visible {
