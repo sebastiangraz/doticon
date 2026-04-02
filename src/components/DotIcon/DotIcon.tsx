@@ -121,6 +121,15 @@ const DORMANT_3x3_OPACITIES: readonly number[] = [
   0.12, 1, 0.12,
 ];
 
+const DORMANT_3x3_Z: readonly number[] = [
+  // row 0
+  2, 3, 2,
+  // row 1
+  3, 4, 3,
+  // row 2
+  2, 3, 2,
+];
+
 const DORMANT_4x4_OPACITIES: readonly number[] = [
   // row 0
   0.12, 1, 0.12, 1,
@@ -247,7 +256,12 @@ const dormantLayout = (config: GridConfig): Vec3[] => {
   return Array.from({ length: config.dotCount }, (_, i) => ({
     x: i % config.n,
     y: Math.floor(i / config.n),
-    z: config.n === 4 ? DORMANT_4x4_Z[i] : baseZ,
+    z:
+      config.n === 3
+        ? DORMANT_3x3_Z[i]
+        : config.n === 4
+          ? DORMANT_4x4_Z[i]
+          : baseZ,
   }));
 };
 
