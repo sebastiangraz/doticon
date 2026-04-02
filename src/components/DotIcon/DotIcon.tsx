@@ -12,7 +12,9 @@ type Vec3 = { x: number; y: number; z: number };
 
 // Fixed size chart — back → front. Independent of grid size so dots look the
 // same regardless of how many columns the grid has. Editable for tuning.
-const DOT_SIZES = [6, 8, 12, 16] as const;
+
+// const DOT_SIZES = [6, 8, 12, 16] as const;
+const DOT_SIZES = [8, 10, 14, 16] as const;
 
 // Pure coordinate-system description. Contains no state-specific data —
 // adding or removing a state never requires changing this type.
