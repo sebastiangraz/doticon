@@ -175,15 +175,22 @@ export const Route = createFileRoute("/")({
             {/* 2 — Spreadsheet table */}
             <div className={`${styles.column} ${styles.card}`}>
               <table className={styles.table}>
-                <thead>
+                <tbody>
                   <tr>
+                    <td /><td /><td /><td /><td />
+                  </tr>
+                  <tr>
+                    <td /><td /><td /><td /><td />
+                  </tr>
+                  <tr>
+                    <th />
                     <th>Name</th>
                     <th>Status</th>
                     <th>Amt</th>
+                    <th />
                   </tr>
-                </thead>
-                <tbody>
                   <tr>
+                    <td />
                     <td>Invoice #041</td>
                     <td>
                       <span className={styles.cell}>
@@ -192,8 +199,10 @@ export const Route = createFileRoute("/")({
                       </span>
                     </td>
                     <td>$1,200</td>
+                    <td />
                   </tr>
                   <tr>
+                    <td />
                     <td>Invoice #040</td>
                     <td>
                       <span style={{ color: "var(--ui-tertiary)" }}>
@@ -201,8 +210,10 @@ export const Route = createFileRoute("/")({
                       </span>
                     </td>
                     <td>$800</td>
+                    <td />
                   </tr>
                   <tr>
+                    <td />
                     <td>Invoice #039</td>
                     <td>
                       <span style={{ color: "var(--ui-tertiary)" }}>
@@ -210,6 +221,13 @@ export const Route = createFileRoute("/")({
                       </span>
                     </td>
                     <td>$3,400</td>
+                    <td />
+                  </tr>
+                  <tr>
+                    <td /><td /><td /><td /><td />
+                  </tr>
+                  <tr>
+                    <td /><td /><td /><td /><td />
                   </tr>
                 </tbody>
               </table>

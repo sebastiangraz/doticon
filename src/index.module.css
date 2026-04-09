@@ -373,10 +373,15 @@
 
   th,
   td {
-    padding: 5px 8px;
+    height: 1.5rlh;
+    padding: 0 0.5rlh;
     text-align: left;
     border-bottom: 1px solid var(--ui-border);
+    border-right: 1px solid var(--ui-border);
     white-space: nowrap;
+    &:last-child {
+      border-right: none;
+    }
   }
 
   th {
