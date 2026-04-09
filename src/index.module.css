@@ -283,7 +283,6 @@
   box-shadow: 0px 0px 0px 1px var(--ui-border) inset;
   span {
     color: var(--ui-tertiary);
-    line-height: 1.5;
     font-size: 0.6rlh;
   }
 

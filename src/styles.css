@@ -37,6 +37,7 @@ body {
   font-style: normal;
   background: light-dark(white, black);
   color: light-dark(black, white);
+  line-height: 1.5;
 }
 * {
   box-sizing: border-box;

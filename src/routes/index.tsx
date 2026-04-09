@@ -177,10 +177,18 @@ export const Route = createFileRoute("/")({
               <table className={styles.table}>
                 <tbody>
                   <tr>
-                    <td /><td /><td /><td /><td />
+                    <td />
+                    <td />
+                    <td />
+                    <td />
+                    <td />
                   </tr>
                   <tr>
-                    <td /><td /><td /><td /><td />
+                    <td />
+                    <td />
+                    <td />
+                    <td />
+                    <td />
                   </tr>
                   <tr>
                     <th />
@@ -224,10 +232,18 @@ export const Route = createFileRoute("/")({
                     <td />
                   </tr>
                   <tr>
-                    <td /><td /><td /><td /><td />
+                    <td />
+                    <td />
+                    <td />
+                    <td />
+                    <td />
                   </tr>
                   <tr>
-                    <td /><td /><td /><td /><td />
+                    <td />
+                    <td />
+                    <td />
+                    <td />
+                    <td />
                   </tr>
                 </tbody>
               </table>
