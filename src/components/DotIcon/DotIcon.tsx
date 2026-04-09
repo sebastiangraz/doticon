@@ -116,24 +116,24 @@ const DORMANT_MASTER: readonly number[] = [
 // as a 4×4 matrix, so these arrays hold 16 values, not 9.
 const DORMANT_3x3_OPACITIES: readonly number[] = [
   // row 0
-  0.12, 1, 0.12, 1,
+  0, 1, 0, 1,
   // row 1
-  1, 0.45, 1, 0.12,
+  1, 0, 1, 0,
   // row 2
-  0.12, 1, 0.45, 1,
+  0, 1, 0, 1,
   // row 3
-  1, 0.12, 1, 0.12,
+  1, 0, 1, 0,
 ];
 
 const DORMANT_3x3_Z: readonly number[] = [
   // row 0
-  1, 2, 2, 2,
+  3, 3, 3, 3,
   // row 1
-  2, 2, 3, 2,
-  // row 2
-  2, 3, 2, 2,
+  3, 3, 4, 3,
   // row 3
-  2, 2, 2, 1,
+  3, 4, 3, 3,
+  // row 3
+  3, 3, 3, 3,
 ];
 
 const DORMANT_4x4_OPACITIES: readonly number[] = [
@@ -387,9 +387,7 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   // All other states use the literal grid size.
   const dormantProjConfig = config.n === 3 ? buildGridConfig(4) : config;
   const dormantZOverride =
-    config.n === 3 ? DORMANT_3x3_Z
-    : config.n === 4 ? DORMANT_4x4_Z
-    : null;
+    config.n === 3 ? DORMANT_3x3_Z : config.n === 4 ? DORMANT_4x4_Z : null;
 
   const dormantOpacities = buildDormantOpacities(config.n);
   const sphereBase = buildSphereBase(config);
