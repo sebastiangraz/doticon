@@ -258,16 +258,17 @@
   display: block;
 }
 
-.propsRow {
+.row {
   display: flex;
   gap: 1rlh;
   user-select: none;
+  width: 100%;
 }
 
-.propsColumn {
-  & > :first-child {
-    margin-bottom: 1rlh;
-  }
+.column {
+  flex-grow: 1;
+  flex-basis: 0;
+  flex-shrink: 0;
 }
 
 .prop {
@@ -289,6 +290,9 @@
   :global(.propValue span) {
     color: var(--ui-secondary);
   }
+  &:first-child {
+    margin-bottom: 1rlh;
+  }
   & > * {
     padding: 1.5rlh;
     flex: 1 0 auto;
@@ -304,4 +308,121 @@
   color: var(--ui-tertiary);
   text-align: center;
   margin-top: 2rlh;
+}
+
+.inSitu {
+  gap: 0;
+}
+
+/* .inSituGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  overflow: hidden;
+  width: 100%;
+} */
+
+.card {
+  /* padding: 1.5rlh; */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  border-right: 1px solid var(--ui-border);
+
+  &:last-child {
+    border-right: none;
+  }
+}
+
+/* — Button — */
+
+.button {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 16px 8px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  text-transform: uppercase;
+  text-box-edge: cap alphabetic;
+  text-box-trim: trim-both;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--ui-border);
+  border-radius: 99em;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: var(--ui-border);
+  }
+}
+
+/* — Table — */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+
+  th,
+  td {
+    padding: 5px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--ui-border);
+    white-space: nowrap;
+  }
+
+  th {
+    color: var(--ui-tertiary);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 9.5px;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+}
+
+.cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding-inline: 1rlh;
+}
+
+.user {
+  align-self: flex-end;
+  background: var(--ui-border);
+  border-radius: 12px 12px 2px 12px;
+  max-width: 85%;
+}
+
+.bubble {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rlh;
+  padding: 8px 11px;
+  font-size: 11px;
+  color: var(--ui-secondary);
+}
+
+.cardSocial {
+  background: #16a34a;
+  color: #fff;
 }

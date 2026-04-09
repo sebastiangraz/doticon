@@ -163,8 +163,80 @@ export const Route = createFileRoute("/")({
               </label>
             </div>
           </div>
-          <div className={styles.propsRow}>
-            <div className={styles.propsColumn}>
+          <div className={`${styles.row} ${styles.inSitu}`}>
+            {/* 1 — Button */}
+            <div className={`${styles.column} ${styles.card}`}>
+              <button type="button" className={styles.button}>
+                <DotIcon size={16} state={icon3dState} grid={4} />
+                Generate
+              </button>
+            </div>
+
+            {/* 2 — Spreadsheet table */}
+            <div className={`${styles.column} ${styles.card}`}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Amt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Invoice #041</td>
+                    <td>
+                      <span className={styles.cell}>
+                        <DotIcon size={12} state={icon3dState} grid={3} />
+                        Active
+                      </span>
+                    </td>
+                    <td>$1,200</td>
+                  </tr>
+                  <tr>
+                    <td>Invoice #040</td>
+                    <td>
+                      <span style={{ color: "var(--ui-tertiary)" }}>
+                        Closed
+                      </span>
+                    </td>
+                    <td>$800</td>
+                  </tr>
+                  <tr>
+                    <td>Invoice #039</td>
+                    <td>
+                      <span style={{ color: "var(--ui-tertiary)" }}>
+                        Closed
+                      </span>
+                    </td>
+                    <td>$3,400</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* 3 — AI chat */}
+            <div className={`${styles.column} ${styles.card}`}>
+              <div className={styles.chat}>
+                <div className={`${styles.bubble} ${styles.user}`}>
+                  Summarise my last three files
+                </div>
+                <div className={`${styles.bubble}`}>
+                  <DotIcon size={16} state={icon3dState} grid={4} />
+                  <div>Here are the highlights from your last three files…</div>
+                </div>
+              </div>
+            </div>
+
+            {/* 4 — Social asset */}
+            <div
+              className={`${styles.column} ${styles.card} ${styles.cardSocial}`}
+            >
+              <DotIcon size={100} state={icon3dState} grid={7} />
+            </div>
+          </div>
+          <div className={styles.row}>
+            <div className={styles.column}>
               <ExposeProps className={styles.prop}>
                 <DotIcon size={80} state={"dormant"} grid={5} />
               </ExposeProps>
@@ -175,7 +247,7 @@ export const Route = createFileRoute("/")({
                 <DotIcon size={12} state={"dormant"} grid={3} />
               </ExposeProps>
             </div>
-            <div className={styles.propsColumn}>
+            <div className={styles.column}>
               <ExposeProps className={styles.prop}>
                 <DotIcon size={80} state={"thinking"} grid={5} />
               </ExposeProps>
@@ -186,7 +258,7 @@ export const Route = createFileRoute("/")({
                 <DotIcon size={12} state={"thinking"} grid={3} />
               </ExposeProps>
             </div>
-            <div className={styles.propsColumn}>
+            <div className={styles.column}>
               <ExposeProps className={styles.prop}>
                 <DotIcon size={80} state={"loading"} grid={5} />
               </ExposeProps>
