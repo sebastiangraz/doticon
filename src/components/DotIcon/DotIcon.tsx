@@ -127,13 +127,13 @@ const DORMANT_3x3_OPACITIES: readonly number[] = [
 
 const DORMANT_3x3_Z: readonly number[] = [
   // row 0
-  3, 3, 3, 3,
+  1, 3, 1, 3,
   // row 1
-  3, 3, 4, 3,
+  3, 1, 4, 1,
   // row 3
-  3, 4, 3, 3,
+  1, 4, 1, 3,
   // row 3
-  3, 3, 3, 3,
+  3, 1, 3, 1,
 ];
 
 const DORMANT_4x4_OPACITIES: readonly number[] = [

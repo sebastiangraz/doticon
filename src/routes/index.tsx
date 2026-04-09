@@ -8,6 +8,7 @@ import DotIcon, {
 } from "#/components/DotIcon/DotIcon";
 import { Shader } from "#/components/Shader/Shader";
 import styles from "../index.module.css";
+import brandGradient from "../assets/brand-gradient.png";
 
 export const Route = createFileRoute("/")({
   component: () => {
