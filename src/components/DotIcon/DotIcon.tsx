@@ -435,6 +435,13 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp = (v: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v));
 
+// SSR + hydration stability: Node and browser can differ in the last few bits of
+// trig/float math. Quantize opacities so SVG attributes serialize identically.
+const quantizeFloat = (v: number): number => {
+  const q = 1e6; // 6 decimal places is visually indistinguishable for opacity.
+  return Math.round(v * q) / q;
+};
+
 // Opacity-only stagger for state changes (no spatial sequencing).
 const OPACITY_STAGGER_MS = 12;
 const OPACITY_CROSSFADE_MS = 160;
@@ -493,7 +500,7 @@ const DotIcon = ({
       cx: motionValue(p.sx),
       cy: motionValue(p.sy),
       r: motionValue(p.size / 2),
-      opacity: motionValue(opa[i]),
+      opacity: motionValue(quantizeFloat(clamp(opa[i], 0, 1))),
     }));
     opacityTransitionRef.current = null;
   }
@@ -539,7 +546,7 @@ const DotIcon = ({
       mvs[i].cy.set(proj[i].sy);
       mvs[i].r.set(Math.max(0, proj[i].size / 2));
 
-      const targetOpacity = clamp(opa[i], 0, 1);
+      const targetOpacity = quantizeFloat(clamp(opa[i], 0, 1));
       if (!inOpacityTransition) {
         mvs[i].opacity.set(targetOpacity);
         continue;
@@ -552,8 +559,8 @@ const DotIcon = ({
         continue;
       }
 
-      const from = clamp(tr.from[i] ?? targetOpacity, 0, 1);
-      mvs[i].opacity.set(lerp(from, targetOpacity, blendT));
+      const from = quantizeFloat(clamp(tr.from[i] ?? targetOpacity, 0, 1));
+      mvs[i].opacity.set(quantizeFloat(lerp(from, targetOpacity, blendT)));
     }
 
     // Once the last dot has fully blended, stop doing special-case math.
