@@ -463,6 +463,11 @@ const quantizeFloat = (v: number): number => {
 const OPACITY_STAGGER_MS = 12;
 const OPACITY_CROSSFADE_MS = 160;
 
+// Per-frame multiplier for fading out dots removed by a dot-count change.
+// At 60 fps (~16 ms/frame) this reaches ~1 % opacity in roughly 380 ms.
+const OUTGOING_DECAY = 0.1;
+const OUTGOING_THRESHOLD = 0.001;
+
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 
 const DotIcon = ({
@@ -498,6 +503,9 @@ const DotIcon = ({
     from: number[];
   } | null>(null);
 
+  // Old dots from a dot-count change — decayed to 0 each frame by the event handler.
+  const outgoingRef = useRef<DotMV[] | null>(null);
+
   // Target MotionValues that the DotCircle springs follow.
   // Rebuilt when grid changes OR when the effective dot count changes (e.g.
   // switching between dormant (16 dots) and other states (9 dots) at grid=3).
@@ -513,13 +521,15 @@ const DotIcon = ({
     gridRef.current !== grid ||
     prevDotCountRef.current !== effectiveDotCount
   ) {
-    // A state-triggered dot-count change (not initial mount, same grid prop):
-    // start all new dots at opacity 0 so the state-transition useEffect below
-    // captures from=[0,...] and the normal crossfade fades them in.
-    const isDotCountTransition =
+    // Any rebuild where the count differs: save old dots for the decay fade-out
+    // and start new dots at opacity 0 so the crossfade brings them in.
+    const isCountChange =
       targetsRef.current !== null &&
-      gridRef.current === grid &&
       prevDotCountRef.current !== effectiveDotCount;
+
+    if (isCountChange) {
+      outgoingRef.current = targetsRef.current;
+    }
 
     gridRef.current = grid;
     prevDotCountRef.current = effectiveDotCount;
@@ -534,7 +544,7 @@ const DotIcon = ({
       cy: motionValue(p.sy),
       r: motionValue(p.size / 2),
       opacity: motionValue(
-        isDotCountTransition ? 0 : quantizeFloat(clamp(opa[i], 0, 1)),
+        isCountChange ? 0 : quantizeFloat(clamp(opa[i], 0, 1)),
       ),
     }));
     opacityTransitionRef.current = null;
@@ -554,6 +564,22 @@ const DotIcon = ({
   }, [effectiveState, time]);
 
   useMotionValueEvent(time, "change", (ms) => {
+    // ── Outgoing dot decay (any dot-count change) ────────────────────────────
+    const outgoing = outgoingRef.current;
+    if (outgoing) {
+      let alive = false;
+      for (const mv of outgoing) {
+        const o = mv.opacity.get();
+        if (o > OUTGOING_THRESHOLD) {
+          mv.opacity.set(quantizeFloat(o * OUTGOING_DECAY));
+          alive = true;
+        } else if (o !== 0) {
+          mv.opacity.set(0);
+        }
+      }
+      if (!alive) outgoingRef.current = null;
+    }
+
     const key = stateRef.current;
     const def = statesRef.current[key];
     const mvs = targetsRef.current!;
@@ -623,6 +649,14 @@ const DotIcon = ({
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: "visible" }}
       >
+        {outgoingRef.current?.map((mv, i) => (
+          <DotCircle
+            key={`out-${i}`}
+            mv={mv}
+            i={i}
+            dotCount={outgoingRef.current!.length}
+          />
+        ))}
         {targetMvs.map((mv, i) => (
           <DotCircle key={i} mv={mv} i={i} dotCount={targetMvs.length} />
         ))}
