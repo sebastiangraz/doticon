@@ -339,143 +339,74 @@ const indexingOpacities = (
 };
 
 // ─── Error ──────────────────────────────────────────────────────────────────────
-// X = main + anti diagonal. Non-X dots stay at 0.12 opacity.
-// Phase uses Chebyshev distance from grid center so all four arms expand together
-// (nested X / diamond rings). Z never exceeds gridBaseZ — the wave only dips toward
-// trailZ (like loading); echoes use shifted Z kernels. Opacity carries the bright
-// head. XY stay on the integer grid.
+// X pattern (main + anti diagonal) with an outward ripple. Non-X dots stay at
+// 0.12 / baseZ. Wave expands by Chebyshev ring so all four arms move together.
+// Z only dips behind the front (echoes); the leading edge stays at baseZ.
 
-const ERROR_PAUSE = 2;
 const ERROR_SPEED = 4;
-const ERROR_Z_APPROACH = 0.62;
-const ERROR_Z_DECAY = 1.38;
-const ERROR_OP_APPROACH = 0.62;
-const ERROR_OP_TAIL = 1.72;
-/** Echo strength for Z, one and two Chebyshev steps inward behind the head. */
-const ERROR_ECHO1_Z = 0.5;
-const ERROR_ECHO2_Z = 0.26;
-const ERROR_ECHO1_OP = 0.52;
-const ERROR_ECHO2_OP = 0.26;
+const ERROR_PAUSE = 2;
+const ERROR_TAIL = 1.7;
 
-const isOnX = (x: number, y: number, n: number): boolean =>
-  x === y || x + y === n - 1;
-
-type ErrorWave = {
-  xMask: boolean[];
-  /** Chebyshev distance from grid center; −1 if not on X. */
-  stepDist: number[];
-  expansionEnd: number;
-  cycle: number;
-};
-
-const buildErrorWave = (config: GridConfig): ErrorWave => {
+const buildErrorData = (config: GridConfig) => {
   const { n, dotCount } = config;
   const cx = (n - 1) / 2;
-
-  const xMask = Array.from({ length: dotCount }, (_, i) => {
+  let maxRing = 0;
+  const ring = Array.from({ length: dotCount }, (_, i) => {
     const x = i % n;
     const y = Math.floor(i / n);
-    return isOnX(x, y, n);
+    if (x !== y && x + y !== n - 1) return -1; // not on X
+    const r = Math.max(Math.abs(x - cx), Math.abs(y - cx));
+    maxRing = Math.max(maxRing, r);
+    return r;
   });
-
-  const stepDist = new Array<number>(dotCount).fill(-1);
-  let maxS = 0;
-  for (let i = 0; i < dotCount; i++) {
-    if (!xMask[i]) continue;
-    const x = i % n;
-    const y = Math.floor(i / n);
-    const s = Math.max(Math.abs(x - cx), Math.abs(y - cx));
-    stepDist[i] = s;
-    maxS = Math.max(maxS, s);
-  }
-
-  // Let outer dots’ head + two inward echoes and kernels decay before pause.
-  const tailRoom = Math.max(ERROR_Z_DECAY, ERROR_OP_TAIL);
-  const expansionEnd = maxS + 2 + tailRoom * 0.2;
-  const cycle = expansionEnd + ERROR_PAUSE;
-
-  return { xMask, stepDist, expansionEnd, cycle };
+  return { ring, cycle: maxRing + 2 + ERROR_TAIL + ERROR_PAUSE };
 };
 
-const errorPhase = (angle: number, cycle: number): number => {
-  if (cycle <= 0) return 0;
-  return ((angle % cycle) + cycle) % cycle;
-};
-
-const smooth01 = (t: number): number => {
-  const u = clamp(t, 0, 1);
-  return u * u * (3 - 2 * u);
-};
-
-const errorZKernel = (d: number): number => {
-  const blendIn = d < 0 ? smooth01(1 + d / ERROR_Z_APPROACH) : 1;
-  const blendOut = 1 - smooth01(clamp(d / ERROR_Z_DECAY, 0, 1));
-  return blendIn * blendOut;
-};
-
-const errorOpDip = (d: number, tail: number): number => {
-  if (d <= 0 || d >= tail) return 0;
-  const u = d / tail;
+// Parabolic tent peaking at midpoint of (0, ERROR_TAIL), zero outside.
+const tent = (d: number): number => {
+  if (d <= 0 || d >= ERROR_TAIL) return 0;
+  const u = d / ERROR_TAIL;
   return 4 * u * (1 - u);
 };
 
 const errorLayout = (
   config: GridConfig,
-  wave: ErrorWave,
+  err: ReturnType<typeof buildErrorData>,
   angle = 0,
 ): Vec3[] => {
   const baseZ = gridBaseZ(config);
   const trailZ = Math.max(0, baseZ - 2);
   const { n, dotCount } = config;
-  const w = errorPhase(angle, wave.cycle);
-  const inPause = w >= wave.expansionEnd;
+  const w = ((angle % err.cycle) + err.cycle) % err.cycle;
 
   return Array.from({ length: dotCount }, (_, i) => {
     const x = i % n;
     const y = Math.floor(i / n);
-    if (!wave.xMask[i]) {
-      return { x, y, z: baseZ };
-    }
-    if (inPause) {
-      return { x, y, z: baseZ };
-    }
-    const s = wave.stepDist[i]!;
-    const d = w - s;
-    // Size only dips below gridBaseZ (echo kernels); lead stays at baseZ.
-    const dip = clamp(
-      ERROR_ECHO1_Z * errorZKernel(d - 1) +
-        ERROR_ECHO2_Z * errorZKernel(d - 2),
-      0,
-      1,
-    );
-    return { x, y, z: lerp(trailZ, baseZ, 1 - dip) };
+    if (err.ring[i] < 0) return { x, y, z: baseZ };
+    const d = w - err.ring[i];
+    // Only echoes dip Z — leading edge stays at baseZ.
+    const dip = clamp(0.5 * tent(d - 1) + 0.25 * tent(d - 2), 0, 1);
+    return { x, y, z: lerp(baseZ, trailZ, dip) };
   });
 };
 
 const errorOpacities = (
   config: GridConfig,
-  wave: ErrorWave,
+  err: ReturnType<typeof buildErrorData>,
   angle: number,
 ): number[] => {
   const { dotCount } = config;
-  const w = errorPhase(angle, wave.cycle);
-  const inPause = w >= wave.expansionEnd;
-  const tail = ERROR_OP_TAIL;
+  const w = ((angle % err.cycle) + err.cycle) % err.cycle;
 
   return Array.from({ length: dotCount }, (_, i) => {
-    if (!wave.xMask[i]) return 0.12;
-    if (inPause) return 1;
-    const s = wave.stepDist[i]!;
-    const d = w - s;
-    const blendIn = d < 0 ? smooth01(1 + d / ERROR_OP_APPROACH) : 1;
-    const opDip = clamp(
-      errorOpDip(d, tail) +
-        ERROR_ECHO1_OP * errorOpDip(d - 1, tail) +
-        ERROR_ECHO2_OP * errorOpDip(d - 2, tail),
+    if (err.ring[i] < 0) return 0.12;
+    const d = w - err.ring[i];
+    const dip = clamp(
+      tent(d) + 0.5 * tent(d - 1) + 0.25 * tent(d - 2),
       0,
       1,
     );
-    return lerp(1, 0.12, opDip * blendIn);
+    return lerp(1, 0.12, dip);
   });
 };
 
@@ -488,7 +419,7 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const dormantOpa = buildDormantOpacities(config.n);
   const sphere = buildSphereBase(config);
   const ranks = buildLoadingRanks(config);
-  const errorWave = buildErrorWave(config);
+  const errorData = buildErrorData(config);
   const indexingSeq = buildIndexingSequence(config);
 
   return {
@@ -526,8 +457,8 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     },
     error: {
       label: STATE_META.error.label,
-      layout: (a = 0) => errorLayout(config, errorWave, a),
-      opacities: (ctx) => errorOpacities(config, errorWave, ctx.opacityAngle),
+      layout: (a = 0) => errorLayout(config, errorData, a),
+      opacities: (ctx) => errorOpacities(config, errorData, ctx.opacityAngle),
       animated: true,
       layoutSpeed: ERROR_SPEED,
       projConfig: config,
