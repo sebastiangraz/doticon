@@ -1,8 +1,7 @@
-import { useRef, useEffect, useMemo } from "react";
+import { useRef, useEffect, useMemo, useState, useLayoutEffect } from "react";
 import type { CSSProperties } from "react";
-import { animate, motionValue, useTime, useMotionValueEvent } from "motion/react";
+import { animate, useTime, useMotionValueEvent } from "motion/react";
 import { isDevDotIconStateEnabled } from "#/env";
-import { DotCircle, type DotMV } from "./DotCircle";
 
 // ─── 3D ENGINE ───────────────────────────────────────────────────────────────
 
@@ -44,13 +43,17 @@ const VIEW_SIZE = 100;
 const SVG_PAD = 14;
 const SVG_SPAN = VIEW_SIZE - 2 * SVG_PAD;
 
-// Z lives in [0, DOT_SIZES.length - 1] — the same index space as DOT_SIZES itself,
-// independent of the XY grid size. This lets any layout assign Z as a direct size
-// index (e.g. DORMANT_4x4_Z values 0–4) without hitting grid-range mismatches.
-const snapSize = (z: number): number => {
-  const t = z / (DOT_SIZES.length - 1);
-  const idx = Math.round(Math.max(0, Math.min(1, t)) * (DOT_SIZES.length - 1));
-  return DOT_SIZES[idx];
+// Continuous interpolation between DOT_SIZES entries. Unlike the old snapSize
+// (which used Math.round → discrete jumps that needed springs to smooth),
+// this linearly blends between adjacent size tiers so Z-depth changes are
+// smooth by construction — no per-dot spring overhead required.
+const lerpSize = (z: number): number => {
+  const t = Math.max(0, Math.min(1, z / (DOT_SIZES.length - 1)));
+  const idx = t * (DOT_SIZES.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.min(lo + 1, DOT_SIZES.length - 1);
+  const frac = idx - lo;
+  return DOT_SIZES[lo] + (DOT_SIZES[hi] - DOT_SIZES[lo]) * frac;
 };
 
 type Projected = { sx: number; sy: number; size: number; z: number };
@@ -62,7 +65,7 @@ const project = (v: Vec3, config: GridConfig): Projected => ({
   sy:
     SVG_PAD +
     ((v.y - config.grid.min) / (config.grid.max - config.grid.min)) * SVG_SPAN,
-  size: snapSize(v.z),
+  size: lerpSize(v.z),
   z: v.z,
 });
 
@@ -466,6 +469,53 @@ const OPACITY_CROSSFADE_MS = 160;
 // Duration for fading out dots removed by a dot-count change (seconds).
 const OUTGOING_DURATION = 0.38;
 
+// ─── SPRING SIMULATION ──────────────────────────────────────────────────────
+// Lightweight per-dot spring for state transitions only. Replaces the previous
+// useSpring × 4 × N DotCircle hooks (which kept 3N spring animations
+// permanently active in Motion's scheduler during animated states).
+
+type DotSpring = {
+  cx: number; cy: number; r: number;
+  vx: number; vy: number; vr: number;
+  settled: boolean;
+};
+
+const SPRING_THRESHOLD = 0.05;
+
+const stepSpring = (
+  s: DotSpring,
+  tCx: number,
+  tCy: number,
+  tR: number,
+  stiffness: number,
+  damping: number,
+  mass: number,
+  dt: number,
+): void => {
+  const ax = (-stiffness * (s.cx - tCx) - damping * s.vx) / mass;
+  const ay = (-stiffness * (s.cy - tCy) - damping * s.vy) / mass;
+  const ar = (-stiffness * (s.r - tR) - damping * s.vr) / mass;
+  s.vx += ax * dt;
+  s.vy += ay * dt;
+  s.vr += ar * dt;
+  s.cx += s.vx * dt;
+  s.cy += s.vy * dt;
+  s.r += s.vr * dt;
+  s.settled =
+    Math.abs(s.cx - tCx) < SPRING_THRESHOLD &&
+    Math.abs(s.cy - tCy) < SPRING_THRESHOLD &&
+    Math.abs(s.r - tR) < SPRING_THRESHOLD &&
+    Math.abs(s.vx) < SPRING_THRESHOLD &&
+    Math.abs(s.vy) < SPRING_THRESHOLD &&
+    Math.abs(s.vr) < SPRING_THRESHOLD;
+  if (s.settled) {
+    s.cx = tCx;
+    s.cy = tCy;
+    s.r = tR;
+    s.vx = s.vy = s.vr = 0;
+  }
+};
+
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 
 const DotIcon = ({
@@ -483,6 +533,7 @@ const DotIcon = ({
 }) => {
   const time = useTime();
   const phaseStartMsRef = useRef(0);
+  const prevMsRef = useRef(0);
   const effectiveState: StateKey =
     state === "dev" && !isDevDotIconStateEnabled ? "dormant" : state;
   const stateRef = useRef<StateKey>(effectiveState);
@@ -491,139 +542,372 @@ const DotIcon = ({
   const config = useMemo(() => buildGridConfig(grid), [grid]);
   const states = useMemo(() => buildStates(config), [config]);
 
-  // Refs so the Motion event handler (registered once) always reads latest values.
+  // Refs so the time-loop callback (registered once) always reads latest values.
   const statesRef = useRef(states);
   statesRef.current = states;
 
+  const activeDef = states[effectiveState];
+  const effectiveDotCount = activeDef.projConfig.dotCount;
+  const effectiveDotCountRef = useRef(effectiveDotCount);
+  effectiveDotCountRef.current = effectiveDotCount;
+
+  // ─── Circle element refs (direct DOM mutation, no MotionValues) ────────
+  const circleRefs = useRef<(SVGCircleElement | null)[]>([]);
+
+  // ─── Outgoing circles (dot-count changes) ─────────────────────────────
+  type OutgoingDot = { cx: string; cy: string; r: string; opacity: string };
+  const [outgoingData, setOutgoingData] = useState<OutgoingDot[] | null>(null);
+  const outgoingCircleRefs = useRef<(SVGCircleElement | null)[]>([]);
+  const gridRef = useRef(grid);
+  const prevDotCountRef = useRef<number | null>(null);
+
+  // Capture outgoing circle data during render (elements still exist in DOM).
+  if (
+    gridRef.current !== grid ||
+    (prevDotCountRef.current !== null &&
+      prevDotCountRef.current !== effectiveDotCount)
+  ) {
+    if (
+      prevDotCountRef.current !== null &&
+      prevDotCountRef.current > effectiveDotCount
+    ) {
+      const data: OutgoingDot[] = [];
+      for (let i = effectiveDotCount; i < prevDotCountRef.current; i++) {
+        const el = circleRefs.current[i];
+        if (el) {
+          data.push({
+            cx: el.getAttribute("cx") || "0",
+            cy: el.getAttribute("cy") || "0",
+            r: el.getAttribute("r") || "0",
+            opacity: el.getAttribute("fill-opacity") || "1",
+          });
+        }
+      }
+      if (data.length > 0) setOutgoingData(data);
+    }
+    gridRef.current = grid;
+    prevDotCountRef.current = effectiveDotCount;
+  }
+  if (prevDotCountRef.current === null) {
+    prevDotCountRef.current = effectiveDotCount;
+  }
+
+  // ─── Springs for non-animated state transitions ──────────────────────
+  const springsRef = useRef<DotSpring[]>([]);
+  const springActiveRef = useRef(false);
+  const springTargetsRef = useRef<Projected[]>([]);
+
+  // ─── Opacity transition ───────────────────────────────────────────────
   const opacityTransitionRef = useRef<{
     state: StateKey;
     startMs: number;
     from: number[];
   } | null>(null);
 
-  // Old dots from a dot-count change — decayed to 0 each frame by the event handler.
-  const outgoingRef = useRef<DotMV[] | null>(null);
+  // ─── Initial attribute setup (before first paint) ─────────────────────
+  const initializedRef = useRef(false);
+  useLayoutEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
 
-  // Target MotionValues that the DotCircle springs follow.
-  // Rebuilt when grid changes OR when the effective dot count changes (e.g.
-  // switching between dormant (16 dots) and other states (9 dots) at grid=3).
-  const gridRef = useRef(grid);
-  const prevDotCountRef = useRef<number | null>(null);
-  const targetsRef = useRef<DotMV[] | null>(null);
-
-  const activeDef = states[effectiveState];
-  const effectiveDotCount = activeDef.projConfig.dotCount;
-
-  if (
-    !targetsRef.current ||
-    gridRef.current !== grid ||
-    prevDotCountRef.current !== effectiveDotCount
-  ) {
-    // Any rebuild where the count differs: save old dots for the decay fade-out
-    // and start new dots at opacity 0 so the crossfade brings them in.
-    const isCountChange =
-      targetsRef.current !== null &&
-      prevDotCountRef.current !== effectiveDotCount;
-
-    if (isCountChange) {
-      outgoingRef.current = targetsRef.current;
-    }
-
-    gridRef.current = grid;
-    prevDotCountRef.current = effectiveDotCount;
     const def = activeDef;
     const proj = def.layout(0).map((v) => project(v, def.projConfig));
     const opa = resolveOpacities(def.opacities, {
       layoutAngle: 0,
       opacityAngle: 0,
     });
-    targetsRef.current = proj.map((p, i) => ({
-      cx: motionValue(p.sx),
-      cy: motionValue(p.sy),
-      r: motionValue(p.size / 2),
-      opacity: motionValue(
-        isCountChange ? 0 : quantizeFloat(clamp(opa[i], 0, 1)),
-      ),
+
+    springsRef.current = proj.map((p) => ({
+      cx: p.sx,
+      cy: p.sy,
+      r: Math.max(0, p.size / 2),
+      vx: 0,
+      vy: 0,
+      vr: 0,
+      settled: true,
     }));
-    opacityTransitionRef.current = null;
-  }
 
-  const targetMvs = targetsRef.current;
+    for (let i = 0; i < effectiveDotCount; i++) {
+      const el = circleRefs.current[i];
+      if (!el) continue;
+      el.setAttribute("cx", String(proj[i].sx));
+      el.setAttribute("cy", String(proj[i].sy));
+      el.setAttribute("r", String(Math.max(0, proj[i].size / 2)));
+      el.setAttribute(
+        "fill-opacity",
+        String(quantizeFloat(clamp(opa[i], 0, 1))),
+      );
+    }
+    prevMsRef.current = time.get();
+    phaseStartMsRef.current = time.get();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
 
-  // ─── State transitions ────────────────────────────────────────────────────
+  // ─── Initialize new circles from dot-count increases ──────────────────
+  useLayoutEffect(() => {
+    const def = statesRef.current[stateRef.current];
+    const proj = def.layout(0).map((v) => project(v, def.projConfig));
+    const opa = resolveOpacities(def.opacities, {
+      layoutAngle: 0,
+      opacityAngle: 0,
+    });
 
+    for (let i = 0; i < effectiveDotCount; i++) {
+      const el = circleRefs.current[i];
+      if (!el || el.hasAttribute("cx")) continue;
+      el.setAttribute("cx", String(proj[i]?.sx ?? 0));
+      el.setAttribute("cy", String(proj[i]?.sy ?? 0));
+      el.setAttribute("r", String(Math.max(0, (proj[i]?.size ?? 0) / 2)));
+      el.setAttribute(
+        "fill-opacity",
+        String(quantizeFloat(clamp(opa[i] ?? 1, 0, 1))),
+      );
+      if (!springsRef.current[i]) {
+        springsRef.current[i] = {
+          cx: proj[i]?.sx ?? 0,
+          cy: proj[i]?.sy ?? 0,
+          r: Math.max(0, (proj[i]?.size ?? 0) / 2),
+          vx: 0,
+          vy: 0,
+          vr: 0,
+          settled: true,
+        };
+      }
+    }
+    springsRef.current.length = effectiveDotCount;
+  }, [effectiveDotCount]);
+
+  // ─── Outgoing dots fade-out ───────────────────────────────────────────
+  useEffect(() => {
+    if (!outgoingData) return;
+    for (const el of outgoingCircleRefs.current) {
+      if (el)
+        animate(el, { fillOpacity: 0 }, {
+          duration: OUTGOING_DURATION,
+          ease: "easeOut",
+        });
+    }
+    const timer = setTimeout(
+      () => setOutgoingData(null),
+      OUTGOING_DURATION * 1000 + 50,
+    );
+    return () => clearTimeout(timer);
+  }, [outgoingData]);
+
+  // ─── State transitions ────────────────────────────────────────────────
   useEffect(() => {
     phaseStartMsRef.current = time.get();
+    prevMsRef.current = time.get();
+
+    // Capture current opacities from DOM for crossfade
+    const currentOpacities: number[] = [];
+    for (let i = 0; i < effectiveDotCount; i++) {
+      const el = circleRefs.current[i];
+      currentOpacities.push(
+        el ? parseFloat(el.getAttribute("fill-opacity") || "1") : 1,
+      );
+    }
     opacityTransitionRef.current = {
       state: effectiveState,
       startMs: time.get(),
-      from: targetsRef.current!.map((mv) => mv.opacity.get()),
+      from: currentOpacities,
     };
-  }, [effectiveState, time]);
 
-  // When the dot count changes, animate outgoing dots to opacity 0 once.
-  // Motion's scheduler handles the timing — no per-frame work needed here.
-  useEffect(() => {
-    const outgoing = outgoingRef.current;
-    if (!outgoing) return;
-    for (const mv of outgoing) {
-      animate(mv.opacity, 0, { duration: OUTGOING_DURATION, ease: "easeOut" });
+    const def = statesRef.current[effectiveState];
+
+    // Set static spring targets for non-animated states
+    if (!def.animated) {
+      const proj = def.layout(0).map((v) => project(v, def.projConfig));
+      springTargetsRef.current = proj;
     }
-  }, [effectiveDotCount]);
 
+    // Always initialise springs from current DOM positions so every state
+    // transition (including → animated) gets a smooth spring-in.
+    for (let i = 0; i < effectiveDotCount; i++) {
+      const el = circleRefs.current[i];
+      if (!springsRef.current[i]) {
+        springsRef.current[i] = {
+          cx: el ? parseFloat(el.getAttribute("cx") || "0") : 0,
+          cy: el ? parseFloat(el.getAttribute("cy") || "0") : 0,
+          r: el ? parseFloat(el.getAttribute("r") || "0") : 0,
+          vx: 0,
+          vy: 0,
+          vr: 0,
+          settled: false,
+        };
+      } else {
+        const s = springsRef.current[i];
+        if (el) {
+          s.cx = parseFloat(el.getAttribute("cx") || "0");
+          s.cy = parseFloat(el.getAttribute("cy") || "0");
+          s.r = parseFloat(el.getAttribute("r") || "0");
+        }
+        s.vx = s.vy = s.vr = 0;
+        s.settled = false;
+      }
+    }
+    springActiveRef.current = true;
+  }, [effectiveState, config, time, effectiveDotCount]);
+
+  // ─── Time loop — direct DOM mutation, no MotionValue intermediary ─────
   useMotionValueEvent(time, "change", (ms) => {
     const key = stateRef.current;
     const def = statesRef.current[key];
-    const mvs = targetsRef.current!;
-    const t = (ms - phaseStartMsRef.current) / 1000;
+    const dotCount = effectiveDotCountRef.current;
+    const dt = Math.min((ms - prevMsRef.current) / 1000, 1 / 30);
+    prevMsRef.current = ms;
 
-    const layoutAngle = def.animated ? (def.layoutSpeed ?? 0) * t : 0;
-    const opacityAngle = def.animated
-      ? (def.opacitySpeed ?? def.layoutSpeed ?? 0) * t
-      : 0;
+    // ── Non-animated states ─────────────────────────────────────────────
+    if (!def.animated) {
+      const hasOpaTr = opacityTransitionRef.current?.state === key;
+      const hasSprings = springActiveRef.current;
+      if (!hasOpaTr && !hasSprings) return;
 
-    const proj = def.layout(layoutAngle).map((v) => project(v, def.projConfig));
-    const opa = resolveOpacities(def.opacities, {
-      layoutAngle,
-      opacityAngle,
-    });
+      const opa = resolveOpacities(def.opacities, {
+        layoutAngle: 0,
+        opacityAngle: 0,
+      });
+      const targets = springTargetsRef.current;
 
-    const tr = opacityTransitionRef.current;
-    const inOpacityTransition = tr?.state === key;
-    const transitionElapsedMs = inOpacityTransition ? ms - tr.startMs : 0;
+      let anySpringsActive = false;
+      for (let i = 0; i < dotCount; i++) {
+        const el = circleRefs.current[i];
+        if (!el) continue;
 
-    const dotCount = mvs.length;
-    for (let i = 0; i < dotCount; i++) {
-      mvs[i].cx.set(proj[i].sx);
-      mvs[i].cy.set(proj[i].sy);
-      mvs[i].r.set(Math.max(0, proj[i].size / 2));
+        // Spring position update
+        if (hasSprings && targets[i]) {
+          const s = springsRef.current[i];
+          if (s && !s.settled) {
+            const t = dotCount <= 1 ? 0 : i / (dotCount - 1);
+            stepSpring(
+              s,
+              targets[i].sx,
+              targets[i].sy,
+              Math.max(0, targets[i].size / 2),
+              240 * (1 - 0.35 * t),
+              25 * (1 + 0.24 * t),
+              0.8 * (1 + 0.6 * t),
+              dt,
+            );
+            el.setAttribute("cx", String(s.cx));
+            el.setAttribute("cy", String(s.cy));
+            el.setAttribute("r", String(Math.max(0, s.r)));
+            anySpringsActive = true;
+          }
+        }
 
-      const targetOpacity = quantizeFloat(clamp(opa[i], 0, 1));
-      if (!inOpacityTransition) {
-        mvs[i].opacity.set(targetOpacity);
-        continue;
+        // Opacity crossfade
+        if (hasOpaTr) {
+          const tr = opacityTransitionRef.current!;
+          const elapsed = ms - tr.startMs;
+          const targetOpa = quantizeFloat(clamp(opa[i], 0, 1));
+          const localMs = elapsed - i * OPACITY_STAGGER_MS;
+          const blendT = clamp(localMs / OPACITY_CROSSFADE_MS, 0, 1);
+          if (blendT >= 1) {
+            el.setAttribute("fill-opacity", String(targetOpa));
+          } else {
+            const from = quantizeFloat(
+              clamp(tr.from[i] ?? targetOpa, 0, 1),
+            );
+            el.setAttribute(
+              "fill-opacity",
+              String(quantizeFloat(lerp(from, targetOpa, blendT))),
+            );
+          }
+        }
       }
 
-      const localMs = transitionElapsedMs - i * OPACITY_STAGGER_MS;
-      const blendT = clamp(localMs / OPACITY_CROSSFADE_MS, 0, 1);
-      if (blendT >= 1) {
-        mvs[i].opacity.set(targetOpacity);
-        continue;
+      if (!anySpringsActive) springActiveRef.current = false;
+      if (hasOpaTr) {
+        const doneAtMs =
+          (dotCount - 1) * OPACITY_STAGGER_MS + OPACITY_CROSSFADE_MS;
+        if (ms - opacityTransitionRef.current!.startMs >= doneAtMs) {
+          opacityTransitionRef.current = null;
+        }
       }
-
-      const from = quantizeFloat(clamp(tr.from[i] ?? targetOpacity, 0, 1));
-      mvs[i].opacity.set(quantizeFloat(lerp(from, targetOpacity, blendT)));
+      return;
     }
 
-    // Once the last dot has fully blended, stop doing special-case math.
-    if (inOpacityTransition) {
+    // ── Animated states — direct setAttribute, no MotionValues ──────────
+    const t = (ms - phaseStartMsRef.current) / 1000;
+    const layoutAngle = (def.layoutSpeed ?? 0) * t;
+    const opacityAngle = (def.opacitySpeed ?? def.layoutSpeed ?? 0) * t;
+
+    const layout = def.layout(layoutAngle);
+    const opa = resolveOpacities(def.opacities, { layoutAngle, opacityAngle });
+    const projCfg = def.projConfig;
+    const gridRange = projCfg.grid.max - projCfg.grid.min;
+
+    const tr = opacityTransitionRef.current;
+    const inOpaTr = tr?.state === key;
+    const trElapsedMs = inOpaTr ? ms - tr.startMs : 0;
+
+    const hasActiveSprings = springActiveRef.current;
+    let anySpringsStillActive = false;
+
+    for (let i = 0; i < dotCount; i++) {
+      const el = circleRefs.current[i];
+      if (!el) continue;
+
+      // Inline projection — avoids allocating an intermediate array.
+      const v = layout[i];
+      const sx =
+        SVG_PAD + ((v.x - projCfg.grid.min) / gridRange) * SVG_SPAN;
+      const sy =
+        SVG_PAD + ((v.y - projCfg.grid.min) / gridRange) * SVG_SPAN;
+      const sz = lerpSize(v.z);
+      const targetR = Math.max(0, sz / 2);
+
+      // Spring blending: smoothly transition from old positions to animated targets
+      if (hasActiveSprings) {
+        const s = springsRef.current[i];
+        if (s && !s.settled) {
+          const st = dotCount <= 1 ? 0 : i / (dotCount - 1);
+          stepSpring(
+            s, sx, sy, targetR,
+            240 * (1 - 0.35 * st),
+            25 * (1 + 0.24 * st),
+            0.8 * (1 + 0.6 * st),
+            dt,
+          );
+          el.setAttribute("cx", String(s.cx));
+          el.setAttribute("cy", String(s.cy));
+          el.setAttribute("r", String(Math.max(0, s.r)));
+          anySpringsStillActive = true;
+        } else {
+          el.setAttribute("cx", String(sx));
+          el.setAttribute("cy", String(sy));
+          el.setAttribute("r", String(targetR));
+        }
+      } else {
+        el.setAttribute("cx", String(sx));
+        el.setAttribute("cy", String(sy));
+        el.setAttribute("r", String(targetR));
+      }
+
+      let targetOpa = quantizeFloat(clamp(opa[i], 0, 1));
+      if (inOpaTr) {
+        const localMs = trElapsedMs - i * OPACITY_STAGGER_MS;
+        const blendT = clamp(localMs / OPACITY_CROSSFADE_MS, 0, 1);
+        if (blendT < 1) {
+          const from = quantizeFloat(clamp(tr.from[i] ?? targetOpa, 0, 1));
+          targetOpa = quantizeFloat(lerp(from, targetOpa, blendT));
+        }
+      }
+      el.setAttribute("fill-opacity", String(targetOpa));
+    }
+
+    if (hasActiveSprings && !anySpringsStillActive) {
+      springActiveRef.current = false;
+    }
+    if (inOpaTr) {
       const doneAtMs =
         (dotCount - 1) * OPACITY_STAGGER_MS + OPACITY_CROSSFADE_MS;
-      if (transitionElapsedMs >= doneAtMs) opacityTransitionRef.current = null;
+      if (trElapsedMs >= doneAtMs) opacityTransitionRef.current = null;
     }
   });
 
-  // ─── Render ────────────────────────────────────────────────────────────────
+  // ─── Render ────────────────────────────────────────────────────────────
 
   return (
     <div
@@ -641,16 +925,27 @@ const DotIcon = ({
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: "visible" }}
       >
-        {outgoingRef.current?.map((mv, i) => (
-          <DotCircle
+        {outgoingData?.map((d, i) => (
+          <circle
             key={`out-${i}`}
-            mv={mv}
-            i={i}
-            dotCount={outgoingRef.current!.length}
+            ref={(el) => {
+              outgoingCircleRefs.current[i] = el;
+            }}
+            cx={d.cx}
+            cy={d.cy}
+            r={d.r}
+            fill="currentColor"
+            fillOpacity={d.opacity}
           />
         ))}
-        {targetMvs.map((mv, i) => (
-          <DotCircle key={i} mv={mv} i={i} dotCount={targetMvs.length} />
+        {Array.from({ length: effectiveDotCount }, (_, i) => (
+          <circle
+            key={i}
+            ref={(el) => {
+              circleRefs.current[i] = el;
+            }}
+            fill="currentColor"
+          />
         ))}
       </svg>
     </div>

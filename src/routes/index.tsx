@@ -28,7 +28,9 @@ export const Route = createFileRoute("/")({
 
     const gridSizeSliderIndex = Math.max(
       0,
-      GRID_SIZE_OPTIONS.indexOf(gridSizeInput as (typeof GRID_SIZE_OPTIONS)[number]),
+      GRID_SIZE_OPTIONS.indexOf(
+        gridSizeInput as (typeof GRID_SIZE_OPTIONS)[number],
+      ),
     );
 
     const copyCurrentDotIconSvg = async () => {
