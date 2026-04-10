@@ -339,23 +339,28 @@ const indexingOpacities = (
 // 0.12 / baseZ. Wave expands by Chebyshev ring so all four arms move together.
 // Z only dips behind the front (echoes); the leading edge stays at baseZ.
 
-const ERROR_SPEED = 4;
-const ERROR_PAUSE = 2;
-const ERROR_TAIL = 1.7;
+const ERROR_SPEED = 6;
+const ERROR_PAUSE = 5;
+const ERROR_TAIL = 3;
+const ERROR_STAGGER = 0.4;
 
 const buildErrorData = (config: GridConfig) => {
   const { n, dotCount } = config;
   const cx = (n - 1) / 2;
-  let maxRing = 0;
+  let maxRank = 0;
   const ring = Array.from({ length: dotCount }, (_, i) => {
     const x = i % n;
     const y = Math.floor(i / n);
     if (x !== y && x + y !== n - 1) return -1; // not on X
     const r = Math.max(Math.abs(x - cx), Math.abs(y - cx));
-    maxRing = Math.max(maxRing, r);
-    return r;
+    // Stagger dots within the same ring by angular position so the wave
+    // sweeps through individual dots instead of flashing whole rings.
+    const a = (Math.atan2(y - cx, x - cx) / (2 * Math.PI) + 1) % 1;
+    const rank = r + a * ERROR_STAGGER;
+    maxRank = Math.max(maxRank, rank);
+    return rank;
   });
-  return { ring, cycle: maxRing + 2 + ERROR_TAIL + ERROR_PAUSE };
+  return { ring, cycle: maxRank + 2 + ERROR_TAIL + ERROR_PAUSE };
 };
 
 // Parabolic tent peaking at midpoint of (0, ERROR_TAIL), zero outside.
@@ -397,11 +402,7 @@ const errorOpacities = (
   return Array.from({ length: dotCount }, (_, i) => {
     if (err.ring[i] < 0) return 0.12;
     const d = w - err.ring[i];
-    const dip = clamp(
-      tent(d) + 0.5 * tent(d - 1) + 0.25 * tent(d - 2),
-      0,
-      1,
-    );
+    const dip = clamp(tent(d) + 0.5 * tent(d - 1) + 0.25 * tent(d - 2), 0, 1);
     return lerp(1, 0.12, dip);
   });
 };
