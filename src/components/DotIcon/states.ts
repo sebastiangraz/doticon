@@ -211,7 +211,7 @@ const mulberry32 = (seed: number): (() => number) => {
   };
 };
 
-type IndexingSeq = { hits: number[][]; latchTick: number[] };
+type IndexingSeq = { dotRanks: number[][]; latchRank: number[] };
 
 const buildIndexingSequence = (config: GridConfig): IndexingSeq => {
   const { n, dotCount } = config;
@@ -232,7 +232,9 @@ const buildIndexingSequence = (config: GridConfig): IndexingSeq => {
     return outerRange > 0 ? clamp((d - clusterHalf) / outerRange, 0, 1) : 0;
   });
 
-  const hits: number[][] = [];
+  const dotRanks: number[][] = Array.from({ length: dotCount }, () => []);
+  const latchRank = new Array(dotCount).fill(Infinity);
+
   for (let tick = 0; tick < INDEXING_TICKS; tick++) {
     const progress = tick / (INDEXING_TICKS - 1);
     const weights = excessDists.map((ed) =>
@@ -259,20 +261,18 @@ const buildIndexingSequence = (config: GridConfig): IndexingSeq => {
       picked.push(idx);
       w[idx] = 0;
     }
-    hits.push(picked);
-  }
 
-  // For cluster dots (excessDist === 0), record first activation tick.
-  const latchTick = new Array(dotCount).fill(Infinity);
-  for (let tick = 0; tick < INDEXING_TICKS; tick++) {
-    for (const idx of hits[tick]) {
-      if (excessDists[idx] === 0 && latchTick[idx] === Infinity) {
-        latchTick[idx] = tick;
+    // Spread activations across the tick for continuous flow
+    for (let j = 0; j < picked.length; j++) {
+      const rank = tick + j / picked.length;
+      dotRanks[picked[j]].push(rank);
+      if (excessDists[picked[j]] === 0 && latchRank[picked[j]] === Infinity) {
+        latchRank[picked[j]] = rank;
       }
     }
   }
 
-  return { hits, latchTick };
+  return { dotRanks, latchRank };
 };
 
 const indexingLayout = (
@@ -289,7 +289,7 @@ const indexingLayout = (
   const growEnd = Math.min(raw, INDEXING_TICKS);
 
   return Array.from({ length: config.dotCount }, (_, i) => {
-    const latch = seq.latchTick[i];
+    const latch = seq.latchRank[i];
     const t =
       growEnd >= latch
         ? clamp((growEnd - latch) / INDEXING_LATCH_TICKS, 0, 1)
@@ -309,26 +309,22 @@ const indexingOpacities = (
 ): number[] => {
   const total = INDEXING_TICKS + INDEXING_PAUSE;
   const raw = ((angle % total) + total) % total;
-  const tick = Math.floor(raw);
-  const frac = raw - tick;
-
   const growEnd = Math.min(raw, INDEXING_TICKS);
-
   const out = new Array(config.dotCount).fill(0.12);
-  for (let offset = 0; offset < INDEXING_TRAIL; offset++) {
-    const t = (((tick - offset) % total) + total) % total;
-    if (t >= INDEXING_TICKS) continue;
-    const age = offset + (1 - frac);
-    const decay = Math.max(0, 1 - age / INDEXING_TRAIL);
-    const opa = lerp(0.12, 1, decay);
-    for (const idx of seq.hits[t]) {
-      if (opa > out[idx]) out[idx] = opa;
-    }
-  }
 
-  // Cluster dots lerp to full opacity over INDEXING_LATCH_TICKS, frozen at cycle end
   for (let i = 0; i < config.dotCount; i++) {
-    const latch = seq.latchTick[i];
+    let best = 0.12;
+    for (const rank of seq.dotRanks[i]) {
+      const age = raw >= rank ? raw - rank : raw + total - rank;
+      if (age > INDEXING_TRAIL) continue;
+      const decay = Math.max(0, 1 - age / INDEXING_TRAIL);
+      const opa = lerp(0.12, 1, decay);
+      if (opa > best) best = opa;
+    }
+    out[i] = best;
+
+    // Cluster dots lerp to full opacity over INDEXING_LATCH_TICKS
+    const latch = seq.latchRank[i];
     if (growEnd >= latch) {
       const lt = clamp((growEnd - latch) / INDEXING_LATCH_TICKS, 0, 1);
       out[i] = lerp(out[i], 1, lt);
