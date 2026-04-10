@@ -23,9 +23,9 @@ import {
 
 export { type StateKey, STATE_KEYS, getStateLabel };
 
-const OPACITY_STAGGER_MS = 12;
-const OPACITY_CROSSFADE_MS = 160;
-const OUTGOING_FADE_S = 0.38;
+const OPACITY_STAGGER_MS = 10;
+const OPACITY_CROSSFADE_MS = 120;
+const OUTGOING_FADE_S = 0.2;
 
 type OutgoingDot = { cx: string; cy: string; r: string; opacity: string };
 
@@ -153,10 +153,7 @@ const DotIcon = ({
           { fillOpacity: 0 },
           { duration: OUTGOING_FADE_S, ease: "easeOut" },
         );
-    const t = setTimeout(
-      () => setOutgoing(null),
-      OUTGOING_FADE_S * 1000 + 50,
-    );
+    const t = setTimeout(() => setOutgoing(null), OUTGOING_FADE_S * 1000 + 50);
     return () => clearTimeout(t);
   }, [outgoing]);
 
@@ -169,9 +166,7 @@ const DotIcon = ({
     const fromOpa: number[] = [];
     for (let i = 0; i < dotCount; i++) {
       const el = circleRefs.current[i];
-      fromOpa.push(
-        el ? parseFloat(el.getAttribute("fill-opacity") || "1") : 1,
-      );
+      fromOpa.push(el ? parseFloat(el.getAttribute("fill-opacity") || "1") : 1);
     }
     opaTrRef.current = {
       state: effectiveState,
