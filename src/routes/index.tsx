@@ -8,10 +8,10 @@ import DotIcon, {
 } from "#/components/DotIcon/DotIcon";
 import { Shader } from "#/components/Shader/Shader";
 import styles from "../index.module.css";
-import brandGradient from "../assets/brand-gradient.png";
 
 export const Route = createFileRoute("/")({
   component: () => {
+    const GRID_SIZE_OPTIONS = [3, 4, 5, 7] as const;
     const [icon3dState, setIcon3dState] = useState<StateKey>("dormant");
     const [gridSize, setGridSize] = useState(4);
     const [gridSizeInput, setGridSizeInput] = useState(gridSize);
@@ -25,6 +25,11 @@ export const Route = createFileRoute("/")({
 
       return () => window.clearTimeout(t);
     }, [gridSizeInput]);
+
+    const gridSizeSliderIndex = Math.max(
+      0,
+      GRID_SIZE_OPTIONS.indexOf(gridSizeInput as (typeof GRID_SIZE_OPTIONS)[number]),
+    );
 
     const copyCurrentDotIconSvg = async () => {
       const svg = dotIconWrapRef.current?.querySelector("svg");
@@ -107,11 +112,16 @@ export const Route = createFileRoute("/")({
               <input
                 id="doticon-grid-size"
                 type="range"
-                min={3}
-                max={7}
-                value={gridSizeInput}
+                min={0}
+                max={GRID_SIZE_OPTIONS.length - 1}
+                step={1}
+                value={gridSizeSliderIndex}
                 onChange={(e) =>
-                  setGridSizeInput(Number.parseInt(e.target.value, 10))
+                  setGridSizeInput(
+                    GRID_SIZE_OPTIONS[
+                      Number.parseInt(e.target.value, 10) ?? 0
+                    ] ?? GRID_SIZE_OPTIONS[0],
+                  )
                 }
                 className={styles.gridSlider}
               />
