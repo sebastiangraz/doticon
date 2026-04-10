@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo } from "react";
 import type { CSSProperties } from "react";
-import { motionValue, useTime, useMotionValueEvent } from "motion/react";
+import { animate, motionValue, useTime, useMotionValueEvent } from "motion/react";
 import { isDevDotIconStateEnabled } from "#/env";
 import { DotCircle, type DotMV } from "./DotCircle";
 
@@ -463,10 +463,8 @@ const quantizeFloat = (v: number): number => {
 const OPACITY_STAGGER_MS = 12;
 const OPACITY_CROSSFADE_MS = 160;
 
-// Per-frame multiplier for fading out dots removed by a dot-count change.
-// At 60 fps (~16 ms/frame) this reaches ~1 % opacity in roughly 380 ms.
-const OUTGOING_DECAY = 0.1;
-const OUTGOING_THRESHOLD = 0.001;
+// Duration for fading out dots removed by a dot-count change (seconds).
+const OUTGOING_DURATION = 0.38;
 
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 
@@ -563,23 +561,17 @@ const DotIcon = ({
     };
   }, [effectiveState, time]);
 
-  useMotionValueEvent(time, "change", (ms) => {
-    // ── Outgoing dot decay (any dot-count change) ────────────────────────────
+  // When the dot count changes, animate outgoing dots to opacity 0 once.
+  // Motion's scheduler handles the timing — no per-frame work needed here.
+  useEffect(() => {
     const outgoing = outgoingRef.current;
-    if (outgoing) {
-      let alive = false;
-      for (const mv of outgoing) {
-        const o = mv.opacity.get();
-        if (o > OUTGOING_THRESHOLD) {
-          mv.opacity.set(quantizeFloat(o * OUTGOING_DECAY));
-          alive = true;
-        } else if (o !== 0) {
-          mv.opacity.set(0);
-        }
-      }
-      if (!alive) outgoingRef.current = null;
+    if (!outgoing) return;
+    for (const mv of outgoing) {
+      animate(mv.opacity, 0, { duration: OUTGOING_DURATION, ease: "easeOut" });
     }
+  }, [effectiveDotCount]);
 
+  useMotionValueEvent(time, "change", (ms) => {
     const key = stateRef.current;
     const def = statesRef.current[key];
     const mvs = targetsRef.current!;
