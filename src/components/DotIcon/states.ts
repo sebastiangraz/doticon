@@ -7,6 +7,7 @@ import {
   rotateY,
   lerp,
   clamp,
+  DOT_SIZES,
 } from "./math";
 
 // ─── Dormant patterns ───────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ const STATE_META = {
   dormant: { label: "Dormant" },
   thinking: { label: "Thinking" },
   loading: { label: "Loading" },
+  error: { label: "Error" },
   indexing: { label: "Indexing" },
   dev: { label: "Dev" },
 } as const;
@@ -337,6 +339,135 @@ const indexingOpacities = (
   return out;
 };
 
+// ─── Error ──────────────────────────────────────────────────────────────────────
+// X = main + anti diagonal on the discrete grid. Non-X dots stay at 0.12 opacity.
+// A smooth pulse travels center-out along the X path (continuous phase, no stair-
+// stepping). Z ramps with soft approach/decay; opacity uses a smooth tent behind
+// the head (~2 rank units). XY stay on the integer grid.
+
+const ERROR_PAUSE = 3;
+const ERROR_SPEED = 10;
+const ERROR_Z_APPROACH = 0.62;
+const ERROR_Z_DECAY = 1.38;
+const ERROR_OP_APPROACH = 0.62;
+const ERROR_OP_TAIL = 2.12;
+
+const isOnX = (x: number, y: number, n: number): boolean =>
+  x === y || x + y === n - 1;
+
+type ErrorWave = {
+  xMask: boolean[];
+  orderRank: number[];
+  xCount: number;
+  cycle: number;
+};
+
+const buildErrorWave = (config: GridConfig): ErrorWave => {
+  const { n, dotCount } = config;
+  const cx = (n - 1) / 2;
+  const cy = (n - 1) / 2;
+
+  type Cell = { i: number; x: number; y: number; d: number; ang: number };
+  const cells: Cell[] = [];
+  for (let i = 0; i < dotCount; i++) {
+    const x = i % n;
+    const y = Math.floor(i / n);
+    if (!isOnX(x, y, n)) continue;
+    const d = Math.max(Math.abs(x - cx), Math.abs(y - cy));
+    const ang = Math.atan2(y - cy, x - cx);
+    cells.push({ i, x, y, d, ang });
+  }
+
+  cells.sort((a, b) => {
+    if (a.d !== b.d) return a.d - b.d;
+    if (a.ang !== b.ang) return a.ang - b.ang;
+    if (a.y !== b.y) return a.y - b.y;
+    return a.x - b.x;
+  });
+
+  const xMask = Array.from({ length: dotCount }, (_, i) => {
+    const x = i % n;
+    const y = Math.floor(i / n);
+    return isOnX(x, y, n);
+  });
+
+  const orderRank = new Array<number>(dotCount).fill(-1);
+  cells.forEach((c, r) => {
+    orderRank[c.i] = r;
+  });
+
+  const xCount = cells.length;
+  const cycle = xCount + ERROR_PAUSE;
+
+  return { xMask, orderRank, xCount, cycle };
+};
+
+const errorPhase = (angle: number, cycle: number): number => {
+  if (cycle <= 0) return 0;
+  return ((angle % cycle) + cycle) % cycle;
+};
+
+const smooth01 = (t: number): number => {
+  const u = clamp(t, 0, 1);
+  return u * u * (3 - 2 * u);
+};
+
+const errorLayout = (
+  config: GridConfig,
+  wave: ErrorWave,
+  angle = 0,
+): Vec3[] => {
+  const baseZ = gridBaseZ(config);
+  const peakZ = Math.min(baseZ + 1, DOT_SIZES.length - 1);
+  const { n, dotCount } = config;
+  const w = errorPhase(angle, wave.cycle);
+  const inPause = wave.xCount === 0 || w >= wave.xCount;
+
+  return Array.from({ length: dotCount }, (_, i) => {
+    const x = i % n;
+    const y = Math.floor(i / n);
+    if (!wave.xMask[i]) {
+      return { x, y, z: baseZ };
+    }
+    if (inPause) {
+      return { x, y, z: baseZ };
+    }
+    const r = wave.orderRank[i]!;
+    const d = w - r;
+    const blendIn =
+      d < 0 ? smooth01(1 + d / ERROR_Z_APPROACH) : 1;
+    const blendOut = 1 - smooth01(clamp(d / ERROR_Z_DECAY, 0, 1));
+    const zMix = blendIn * blendOut;
+    return { x, y, z: lerp(baseZ, peakZ, zMix) };
+  });
+};
+
+const errorOpacities = (
+  config: GridConfig,
+  wave: ErrorWave,
+  angle: number,
+): number[] => {
+  const { dotCount } = config;
+  const w = errorPhase(angle, wave.cycle);
+  const inPause = wave.xCount === 0 || w >= wave.xCount;
+  const tail = ERROR_OP_TAIL;
+
+  return Array.from({ length: dotCount }, (_, i) => {
+    if (!wave.xMask[i]) return 0.12;
+    if (inPause) return 1;
+    const r = wave.orderRank[i]!;
+    const d = w - r;
+    const blendIn =
+      d < 0 ? smooth01(1 + d / ERROR_OP_APPROACH) : 1;
+    let opTent = 0;
+    if (d > 0 && d < tail) {
+      const u = d / tail;
+      opTent = 4 * u * (1 - u);
+    }
+    return lerp(1, 0.12, opTent * blendIn);
+  });
+};
+
 // ─── Build ──────────────────────────────────────────────────────────────────────
 
 export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
@@ -346,6 +477,7 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const dormantOpa = buildDormantOpacities(config.n);
   const sphere = buildSphereBase(config);
   const ranks = buildLoadingRanks(config);
+  const errorWave = buildErrorWave(config);
   const indexingSeq = buildIndexingSequence(config);
 
   return {
@@ -379,6 +511,14 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       opacities: (ctx) => loadingOpacities(config, ranks, ctx.opacityAngle),
       animated: true,
       layoutSpeed: 16,
+      projConfig: config,
+    },
+    error: {
+      label: STATE_META.error.label,
+      layout: (a = 0) => errorLayout(config, errorWave, a),
+      opacities: (ctx) => errorOpacities(config, errorWave, ctx.opacityAngle),
+      animated: true,
+      layoutSpeed: ERROR_SPEED,
       projConfig: config,
     },
     indexing: {
