@@ -420,6 +420,7 @@
   background: var(--ui-border);
   border-radius: 12px 12px 2px 12px;
   max-width: 85%;
+  color: var(--ui-secondary);
 }
 
 .bubble {
@@ -428,7 +429,9 @@
   gap: 0.5rlh;
   padding: 8px 11px;
   font-size: 11px;
-  color: var(--ui-secondary);
+  & > *:not(svg) {
+    color: var(--ui-secondary);
+  }
 }
 
 .cardSocial {

@@ -15,13 +15,9 @@ import {
 
 const DORMANT_MASTER_N = 7;
 const DORMANT_MASTER: readonly number[] = [
-  0.12, 1, 1, 0.12, 1, 1, 1,
-  1, 0.45, 1, 1, 0.12, 1, 1,
-  1, 1, 0.45, 1, 1, 0.12, 1,
-  0.12, 1, 1, 0.45, 1, 1, 0.12,
-  1, 0.12, 1, 1, 0.45, 1, 1,
-  1, 1, 0.12, 1, 1, 0.45, 1,
-  1, 1, 1, 0.12, 1, 1, 0.12,
+  0.12, 1, 1, 0.12, 1, 1, 1, 1, 0.45, 1, 1, 0.12, 1, 1, 1, 1, 0.45, 1, 1, 0.12,
+  1, 0.12, 1, 1, 0.45, 1, 1, 0.12, 1, 0.12, 1, 1, 0.45, 1, 1, 1, 1, 0.12, 1, 1,
+  0.45, 1, 1, 1, 1, 0.12, 1, 1, 0.12,
 ];
 
 // Grid=3 renders internally as 4×4, so arrays hold 16 values.
@@ -59,6 +55,7 @@ const STATE_META = {
   dormant: { label: "Dormant" },
   thinking: { label: "Thinking" },
   loading: { label: "Loading" },
+  indexing: { label: "Indexing" },
   dev: { label: "Dev" },
 } as const;
 
@@ -190,21 +187,166 @@ const loadingOpacities = (
   });
 };
 
+// ─── Indexing ───────────────────────────────────────────────────────────────────
+// Random dots converge toward a centre cluster over one cycle, driven purely by
+// opacity.  The sequence is precomputed with a seeded PRNG so there is zero
+// runtime randomness cost.
+
+const INDEXING_TICKS = 32; //32
+const INDEXING_TRAIL = 4; //6
+const INDEXING_PAUSE = 1; //8
+const INDEXING_FOCUS = 6; //6
+const INDEXING_SEED = 30; //5, 9, 30
+const INDEXING_SPEED = 7;
+const INDEXING_LATCH_TICKS = 4;
+
+const mulberry32 = (seed: number): (() => number) => {
+  let s = seed | 0;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+type IndexingSeq = { hits: number[][]; latchTick: number[] };
+
+const buildIndexingSequence = (config: GridConfig): IndexingSeq => {
+  const { n, dotCount } = config;
+  const center = (n - 1) / 2;
+  const maxDist = center; // Chebyshev distance to corner
+  const clusterSize = clamp(n - 2, 1, 3);
+  const clusterHalf = (clusterSize - 1) / 2;
+  const perTick = Math.max(1, Math.round(dotCount / 8));
+  const rng = mulberry32(INDEXING_SEED + n * 137);
+
+  // Normalised excess distance beyond cluster boundary [0, 1].
+  // Cluster dots get 0 (always full weight); outer dots scale to 1.
+  const outerRange = maxDist - clusterHalf;
+  const excessDists: number[] = Array.from({ length: dotCount }, (_, i) => {
+    const x = i % n;
+    const y = Math.floor(i / n);
+    const d = Math.max(Math.abs(x - center), Math.abs(y - center));
+    return outerRange > 0 ? clamp((d - clusterHalf) / outerRange, 0, 1) : 0;
+  });
+
+  const hits: number[][] = [];
+  for (let tick = 0; tick < INDEXING_TICKS; tick++) {
+    const progress = tick / (INDEXING_TICKS - 1);
+    const weights = excessDists.map((ed) =>
+      Math.exp(-ed * progress * INDEXING_FOCUS),
+    );
+
+    // Weighted sampling without replacement
+    const count = Math.min(perTick, dotCount);
+    const w = [...weights];
+    const picked: number[] = [];
+    for (let j = 0; j < count; j++) {
+      let total = 0;
+      for (let k = 0; k < dotCount; k++) total += w[k];
+      if (total <= 0) break;
+      let r = rng() * total;
+      let idx = 0;
+      for (let k = 0; k < dotCount; k++) {
+        r -= w[k];
+        if (r <= 0) {
+          idx = k;
+          break;
+        }
+      }
+      picked.push(idx);
+      w[idx] = 0;
+    }
+    hits.push(picked);
+  }
+
+  // For cluster dots (excessDist === 0), record first activation tick.
+  const latchTick = new Array(dotCount).fill(Infinity);
+  for (let tick = 0; tick < INDEXING_TICKS; tick++) {
+    for (const idx of hits[tick]) {
+      if (excessDists[idx] === 0 && latchTick[idx] === Infinity) {
+        latchTick[idx] = tick;
+      }
+    }
+  }
+
+  return { hits, latchTick };
+};
+
+const indexingLayout = (
+  config: GridConfig,
+  seq: IndexingSeq,
+  angle = 0,
+): Vec3[] => {
+  const baseZ = gridBaseZ(config);
+  const smallZ = Math.max(0, baseZ - 1);
+  const total = INDEXING_TICKS + INDEXING_PAUSE;
+  const raw = ((angle % total) + total) % total;
+  // Freeze Z growth at the end of the active phase so late-latching dots
+  // stay partially grown during the pause ("ran out of time" effect).
+  const growEnd = Math.min(raw, INDEXING_TICKS);
+
+  return Array.from({ length: config.dotCount }, (_, i) => {
+    const latch = seq.latchTick[i];
+    const t =
+      growEnd >= latch
+        ? clamp((growEnd - latch) / INDEXING_LATCH_TICKS, 0, 1)
+        : 0;
+    return {
+      x: i % config.n,
+      y: Math.floor(i / config.n),
+      z: lerp(smallZ, baseZ, t),
+    };
+  });
+};
+
+const indexingOpacities = (
+  config: GridConfig,
+  seq: IndexingSeq,
+  angle: number,
+): number[] => {
+  const total = INDEXING_TICKS + INDEXING_PAUSE;
+  const raw = ((angle % total) + total) % total;
+  const tick = Math.floor(raw);
+  const frac = raw - tick;
+
+  const growEnd = Math.min(raw, INDEXING_TICKS);
+
+  const out = new Array(config.dotCount).fill(0.12);
+  for (let offset = 0; offset < INDEXING_TRAIL; offset++) {
+    const t = (((tick - offset) % total) + total) % total;
+    if (t >= INDEXING_TICKS) continue;
+    const age = offset + (1 - frac);
+    const decay = Math.max(0, 1 - age / INDEXING_TRAIL);
+    const opa = lerp(0.12, 1, decay);
+    for (const idx of seq.hits[t]) {
+      if (opa > out[idx]) out[idx] = opa;
+    }
+  }
+
+  // Cluster dots lerp to full opacity over INDEXING_LATCH_TICKS, frozen at cycle end
+  for (let i = 0; i < config.dotCount; i++) {
+    const latch = seq.latchTick[i];
+    if (growEnd >= latch) {
+      const lt = clamp((growEnd - latch) / INDEXING_LATCH_TICKS, 0, 1);
+      out[i] = lerp(out[i], 1, lt);
+    }
+  }
+
+  return out;
+};
+
 // ─── Build ──────────────────────────────────────────────────────────────────────
 
-export const buildStates = (
-  config: GridConfig,
-): Record<StateKey, StateDef> => {
+export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const dormantProj = config.n === 3 ? buildGridConfig(4) : config;
   const dormantZ =
-    config.n === 3
-      ? DORMANT_3x3_Z
-      : config.n === 4
-        ? DORMANT_4x4_Z
-        : null;
+    config.n === 3 ? DORMANT_3x3_Z : config.n === 4 ? DORMANT_4x4_Z : null;
   const dormantOpa = buildDormantOpacities(config.n);
   const sphere = buildSphereBase(config);
   const ranks = buildLoadingRanks(config);
+  const indexingSeq = buildIndexingSequence(config);
 
   return {
     dev: {
@@ -236,7 +378,16 @@ export const buildStates = (
       layout: (a = 0) => loadingLayout(config, ranks, a),
       opacities: (ctx) => loadingOpacities(config, ranks, ctx.opacityAngle),
       animated: true,
-      layoutSpeed: 12,
+      layoutSpeed: 16,
+      projConfig: config,
+    },
+    indexing: {
+      label: STATE_META.indexing.label,
+      layout: (a = 0) => indexingLayout(config, indexingSeq, a),
+      opacities: (ctx) =>
+        indexingOpacities(config, indexingSeq, ctx.opacityAngle),
+      animated: true,
+      layoutSpeed: INDEXING_SPEED,
       projConfig: config,
     },
   };
