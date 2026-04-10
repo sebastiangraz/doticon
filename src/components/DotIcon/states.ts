@@ -7,7 +7,6 @@ import {
   rotateY,
   lerp,
   clamp,
-  DOT_SIZES,
 } from "./math";
 
 // ─── Dormant patterns ───────────────────────────────────────────────────────────
@@ -340,50 +339,38 @@ const indexingOpacities = (
 };
 
 // ─── Error ──────────────────────────────────────────────────────────────────────
-// X = main + anti diagonal on the discrete grid. Non-X dots stay at 0.12 opacity.
-// A smooth pulse travels center-out along the X path (continuous phase, no stair-
-// stepping). Z ramps with soft approach/decay; opacity uses a smooth tent behind
-// the head (~2 rank units). XY stay on the integer grid.
+// X = main + anti diagonal. Non-X dots stay at 0.12 opacity.
+// Phase uses Chebyshev distance from grid center so all four arms expand together
+// (nested X / diamond rings). Z never exceeds gridBaseZ — the wave only dips toward
+// trailZ (like loading); echoes use shifted Z kernels. Opacity carries the bright
+// head. XY stay on the integer grid.
 
-const ERROR_PAUSE = 3;
-const ERROR_SPEED = 10;
+const ERROR_PAUSE = 2;
+const ERROR_SPEED = 4;
 const ERROR_Z_APPROACH = 0.62;
 const ERROR_Z_DECAY = 1.38;
 const ERROR_OP_APPROACH = 0.62;
-const ERROR_OP_TAIL = 2.12;
+const ERROR_OP_TAIL = 1.72;
+/** Echo strength for Z, one and two Chebyshev steps inward behind the head. */
+const ERROR_ECHO1_Z = 0.5;
+const ERROR_ECHO2_Z = 0.26;
+const ERROR_ECHO1_OP = 0.52;
+const ERROR_ECHO2_OP = 0.26;
 
 const isOnX = (x: number, y: number, n: number): boolean =>
   x === y || x + y === n - 1;
 
 type ErrorWave = {
   xMask: boolean[];
-  orderRank: number[];
-  xCount: number;
+  /** Chebyshev distance from grid center; −1 if not on X. */
+  stepDist: number[];
+  expansionEnd: number;
   cycle: number;
 };
 
 const buildErrorWave = (config: GridConfig): ErrorWave => {
   const { n, dotCount } = config;
   const cx = (n - 1) / 2;
-  const cy = (n - 1) / 2;
-
-  type Cell = { i: number; x: number; y: number; d: number; ang: number };
-  const cells: Cell[] = [];
-  for (let i = 0; i < dotCount; i++) {
-    const x = i % n;
-    const y = Math.floor(i / n);
-    if (!isOnX(x, y, n)) continue;
-    const d = Math.max(Math.abs(x - cx), Math.abs(y - cy));
-    const ang = Math.atan2(y - cy, x - cx);
-    cells.push({ i, x, y, d, ang });
-  }
-
-  cells.sort((a, b) => {
-    if (a.d !== b.d) return a.d - b.d;
-    if (a.ang !== b.ang) return a.ang - b.ang;
-    if (a.y !== b.y) return a.y - b.y;
-    return a.x - b.x;
-  });
 
   const xMask = Array.from({ length: dotCount }, (_, i) => {
     const x = i % n;
@@ -391,15 +378,23 @@ const buildErrorWave = (config: GridConfig): ErrorWave => {
     return isOnX(x, y, n);
   });
 
-  const orderRank = new Array<number>(dotCount).fill(-1);
-  cells.forEach((c, r) => {
-    orderRank[c.i] = r;
-  });
+  const stepDist = new Array<number>(dotCount).fill(-1);
+  let maxS = 0;
+  for (let i = 0; i < dotCount; i++) {
+    if (!xMask[i]) continue;
+    const x = i % n;
+    const y = Math.floor(i / n);
+    const s = Math.max(Math.abs(x - cx), Math.abs(y - cx));
+    stepDist[i] = s;
+    maxS = Math.max(maxS, s);
+  }
 
-  const xCount = cells.length;
-  const cycle = xCount + ERROR_PAUSE;
+  // Let outer dots’ head + two inward echoes and kernels decay before pause.
+  const tailRoom = Math.max(ERROR_Z_DECAY, ERROR_OP_TAIL);
+  const expansionEnd = maxS + 2 + tailRoom * 0.2;
+  const cycle = expansionEnd + ERROR_PAUSE;
 
-  return { xMask, orderRank, xCount, cycle };
+  return { xMask, stepDist, expansionEnd, cycle };
 };
 
 const errorPhase = (angle: number, cycle: number): number => {
@@ -412,16 +407,28 @@ const smooth01 = (t: number): number => {
   return u * u * (3 - 2 * u);
 };
 
+const errorZKernel = (d: number): number => {
+  const blendIn = d < 0 ? smooth01(1 + d / ERROR_Z_APPROACH) : 1;
+  const blendOut = 1 - smooth01(clamp(d / ERROR_Z_DECAY, 0, 1));
+  return blendIn * blendOut;
+};
+
+const errorOpDip = (d: number, tail: number): number => {
+  if (d <= 0 || d >= tail) return 0;
+  const u = d / tail;
+  return 4 * u * (1 - u);
+};
+
 const errorLayout = (
   config: GridConfig,
   wave: ErrorWave,
   angle = 0,
 ): Vec3[] => {
   const baseZ = gridBaseZ(config);
-  const peakZ = Math.min(baseZ + 1, DOT_SIZES.length - 1);
+  const trailZ = Math.max(0, baseZ - 2);
   const { n, dotCount } = config;
   const w = errorPhase(angle, wave.cycle);
-  const inPause = wave.xCount === 0 || w >= wave.xCount;
+  const inPause = w >= wave.expansionEnd;
 
   return Array.from({ length: dotCount }, (_, i) => {
     const x = i % n;
@@ -432,13 +439,16 @@ const errorLayout = (
     if (inPause) {
       return { x, y, z: baseZ };
     }
-    const r = wave.orderRank[i]!;
-    const d = w - r;
-    const blendIn =
-      d < 0 ? smooth01(1 + d / ERROR_Z_APPROACH) : 1;
-    const blendOut = 1 - smooth01(clamp(d / ERROR_Z_DECAY, 0, 1));
-    const zMix = blendIn * blendOut;
-    return { x, y, z: lerp(baseZ, peakZ, zMix) };
+    const s = wave.stepDist[i]!;
+    const d = w - s;
+    // Size only dips below gridBaseZ (echo kernels); lead stays at baseZ.
+    const dip = clamp(
+      ERROR_ECHO1_Z * errorZKernel(d - 1) +
+        ERROR_ECHO2_Z * errorZKernel(d - 2),
+      0,
+      1,
+    );
+    return { x, y, z: lerp(trailZ, baseZ, 1 - dip) };
   });
 };
 
@@ -449,22 +459,23 @@ const errorOpacities = (
 ): number[] => {
   const { dotCount } = config;
   const w = errorPhase(angle, wave.cycle);
-  const inPause = wave.xCount === 0 || w >= wave.xCount;
+  const inPause = w >= wave.expansionEnd;
   const tail = ERROR_OP_TAIL;
 
   return Array.from({ length: dotCount }, (_, i) => {
     if (!wave.xMask[i]) return 0.12;
     if (inPause) return 1;
-    const r = wave.orderRank[i]!;
-    const d = w - r;
-    const blendIn =
-      d < 0 ? smooth01(1 + d / ERROR_OP_APPROACH) : 1;
-    let opTent = 0;
-    if (d > 0 && d < tail) {
-      const u = d / tail;
-      opTent = 4 * u * (1 - u);
-    }
-    return lerp(1, 0.12, opTent * blendIn);
+    const s = wave.stepDist[i]!;
+    const d = w - s;
+    const blendIn = d < 0 ? smooth01(1 + d / ERROR_OP_APPROACH) : 1;
+    const opDip = clamp(
+      errorOpDip(d, tail) +
+        ERROR_ECHO1_OP * errorOpDip(d - 1, tail) +
+        ERROR_ECHO2_OP * errorOpDip(d - 2, tail),
+      0,
+      1,
+    );
+    return lerp(1, 0.12, opDip * blendIn);
   });
 };
 
