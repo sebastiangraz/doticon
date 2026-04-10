@@ -513,6 +513,14 @@ const DotIcon = ({
     gridRef.current !== grid ||
     prevDotCountRef.current !== effectiveDotCount
   ) {
+    // A state-triggered dot-count change (not initial mount, same grid prop):
+    // start all new dots at opacity 0 so the state-transition useEffect below
+    // captures from=[0,...] and the normal crossfade fades them in.
+    const isDotCountTransition =
+      targetsRef.current !== null &&
+      gridRef.current === grid &&
+      prevDotCountRef.current !== effectiveDotCount;
+
     gridRef.current = grid;
     prevDotCountRef.current = effectiveDotCount;
     const def = activeDef;
@@ -525,7 +533,9 @@ const DotIcon = ({
       cx: motionValue(p.sx),
       cy: motionValue(p.sy),
       r: motionValue(p.size / 2),
-      opacity: motionValue(quantizeFloat(clamp(opa[i], 0, 1))),
+      opacity: motionValue(
+        isDotCountTransition ? 0 : quantizeFloat(clamp(opa[i], 0, 1)),
+      ),
     }));
     opacityTransitionRef.current = null;
   }
