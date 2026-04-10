@@ -86,7 +86,7 @@ Exports: `StateKey`, `STATE_KEYS`, `getStateLabel`.
 
 ## Demo page (index route):
 
-Grid slider (4 discrete options: 3, 4, 5, 7 — mapped to a 0–3 range input), state toggle buttons, a "COPY" button that serialises the current SVG to clipboard, and an `ExposeProps` gallery showing multiple grid sizes (3–7) at each state. The grid slider uses a 140ms debounce (`gridSizeInput` updates immediately for the label; `gridSize` updates after a 140ms timeout) to prevent excessive transitions during rapid dragging.
+Grid slider (3 discrete options: 3, 4, 7 — mapped to a 0–2 range input), state toggle buttons, a "COPY" button that serialises the current SVG to clipboard, and an `ExposeProps` gallery showing multiple grid sizes (3–7) at each state. The grid slider uses a 140ms debounce (`gridSizeInput` updates immediately for the label; `gridSize` updates after a 140ms timeout) to prevent excessive transitions during rapid dragging.
 
 Also includes in-situ demo cards showing DotIcon in context: a button, a spreadsheet row, an AI chat bubble, and a social asset frame.
 
