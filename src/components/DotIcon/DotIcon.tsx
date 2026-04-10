@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo } from "react";
 import type { CSSProperties } from "react";
-import { motionValue, useTime, useMotionValueEvent } from "motion/react";
+import { animate, motionValue, useTime, useMotionValueEvent } from "motion/react";
 import { isDevDotIconStateEnabled } from "#/env";
 import { DotCircle, type DotMV } from "./DotCircle";
 
@@ -112,22 +112,28 @@ const DORMANT_MASTER: readonly number[] = [
 //   █ █ ▒ █
 //   █ █ █ D
 
+// 3×3 is a size-tier label ("small"). Dormant at grid=3 renders internally
+// as a 4×4 matrix, so these arrays hold 16 values, not 9.
 const DORMANT_3x3_OPACITIES: readonly number[] = [
   // row 0
-  0.12, 1, 0.12,
+  0, 1, 0, 1,
   // row 1
-  1, 1, 1,
+  1, 0, 1, 0,
   // row 2
-  0.12, 1, 0.12,
+  0, 1, 0, 1,
+  // row 3
+  1, 0, 1, 0,
 ];
 
 const DORMANT_3x3_Z: readonly number[] = [
   // row 0
-  2, 3, 2,
+  1, 3, 1, 3,
   // row 1
-  3, 4, 3,
-  // row 2
-  2, 3, 2,
+  3, 1, 4, 1,
+  // row 3
+  1, 4, 1, 3,
+  // row 3
+  3, 1, 3, 1,
 ];
 
 const DORMANT_4x4_OPACITIES: readonly number[] = [
@@ -223,6 +229,8 @@ type StateDef = {
   layout: (angle?: number) => Vec3[];
   opacities: Opacities;
   animated: boolean;
+  /** Coordinate space used to project this state's layout into SVG. */
+  projConfig: GridConfig;
   /** Radians per second — passed to `layout()` (3D spin). */
   layoutSpeed?: number;
   /** Radians per second — phase for functional opacities. Defaults to `layoutSpeed` when omitted. */
@@ -250,18 +258,17 @@ const gridBaseZ = (config: GridConfig): number => {
 };
 
 // Dormant: all dots at baseZ (static logo pattern; opacity carries the design).
-// n=4 uses DORMANT_4x4_Z for per-dot size control instead.
-const dormantLayout = (config: GridConfig): Vec3[] => {
-  const baseZ = gridBaseZ(config);
-  return Array.from({ length: config.dotCount }, (_, i) => ({
-    x: i % config.n,
-    y: Math.floor(i / config.n),
-    z:
-      config.n === 3
-        ? DORMANT_3x3_Z[i]
-        : config.n === 4
-          ? DORMANT_4x4_Z[i]
-          : baseZ,
+// projConfig is the effective grid (4×4 when the user passes grid=3).
+// zOverride supplies per-dot Z for hand-crafted sizes; null falls back to baseZ.
+const dormantLayout = (
+  projConfig: GridConfig,
+  zOverride: readonly number[] | null,
+): Vec3[] => {
+  const baseZ = gridBaseZ(projConfig);
+  return Array.from({ length: projConfig.dotCount }, (_, i) => ({
+    x: i % projConfig.n,
+    y: Math.floor(i / projConfig.n),
+    z: zOverride !== null ? zOverride[i]! : baseZ,
   }));
 };
 
@@ -376,6 +383,12 @@ const loadingOpacities = (
 // computed once per GridConfig, and invisible to the GridConfig type itself.
 
 const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
+  // Dormant at grid=3 (small) uses a 4×4 internal layout.
+  // All other states use the literal grid size.
+  const dormantProjConfig = config.n === 3 ? buildGridConfig(4) : config;
+  const dormantZOverride =
+    config.n === 3 ? DORMANT_3x3_Z : config.n === 4 ? DORMANT_4x4_Z : null;
+
   const dormantOpacities = buildDormantOpacities(config.n);
   const sphereBase = buildSphereBase(config);
   const { dotRank } = buildLoadingOrder(config);
@@ -386,12 +399,14 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       layout: () => devLayout(config),
       opacities: Array.from({ length: config.dotCount }, () => 1),
       animated: false,
+      projConfig: config,
     },
     dormant: {
       label: STATE_META.dormant.label,
-      layout: () => dormantLayout(config),
+      layout: () => dormantLayout(dormantProjConfig, dormantZOverride),
       opacities: dormantOpacities,
       animated: false,
+      projConfig: dormantProjConfig,
     },
     thinking: {
       label: STATE_META.thinking.label,
@@ -406,6 +421,7 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       animated: true,
       layoutSpeed: 2.5,
       opacitySpeed: 4,
+      projConfig: config,
     },
     loading: {
       label: STATE_META.loading.label,
@@ -413,6 +429,7 @@ const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       opacities: (ctx) => loadingOpacities(config, dotRank, ctx.opacityAngle),
       animated: true,
       layoutSpeed: 12,
+      projConfig: config,
     },
   };
 };
@@ -446,6 +463,9 @@ const quantizeFloat = (v: number): number => {
 const OPACITY_STAGGER_MS = 12;
 const OPACITY_CROSSFADE_MS = 160;
 
+// Duration for fading out dots removed by a dot-count change (seconds).
+const OUTGOING_DURATION = 0.38;
+
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 
 const DotIcon = ({
@@ -472,8 +492,6 @@ const DotIcon = ({
   const states = useMemo(() => buildStates(config), [config]);
 
   // Refs so the Motion event handler (registered once) always reads latest values.
-  const configRef = useRef(config);
-  configRef.current = config;
   const statesRef = useRef(states);
   statesRef.current = states;
 
@@ -483,15 +501,38 @@ const DotIcon = ({
     from: number[];
   } | null>(null);
 
+  // Old dots from a dot-count change — decayed to 0 each frame by the event handler.
+  const outgoingRef = useRef<DotMV[] | null>(null);
+
   // Target MotionValues that the DotCircle springs follow.
-  // Rebuilt when grid changes (dot count changes — no continuity is possible).
+  // Rebuilt when grid changes OR when the effective dot count changes (e.g.
+  // switching between dormant (16 dots) and other states (9 dots) at grid=3).
   const gridRef = useRef(grid);
+  const prevDotCountRef = useRef<number | null>(null);
   const targetsRef = useRef<DotMV[] | null>(null);
 
-  if (!targetsRef.current || gridRef.current !== grid) {
+  const activeDef = states[effectiveState];
+  const effectiveDotCount = activeDef.projConfig.dotCount;
+
+  if (
+    !targetsRef.current ||
+    gridRef.current !== grid ||
+    prevDotCountRef.current !== effectiveDotCount
+  ) {
+    // Any rebuild where the count differs: save old dots for the decay fade-out
+    // and start new dots at opacity 0 so the crossfade brings them in.
+    const isCountChange =
+      targetsRef.current !== null &&
+      prevDotCountRef.current !== effectiveDotCount;
+
+    if (isCountChange) {
+      outgoingRef.current = targetsRef.current;
+    }
+
     gridRef.current = grid;
-    const def = states[effectiveState];
-    const proj = def.layout(0).map((v) => project(v, config));
+    prevDotCountRef.current = effectiveDotCount;
+    const def = activeDef;
+    const proj = def.layout(0).map((v) => project(v, def.projConfig));
     const opa = resolveOpacities(def.opacities, {
       layoutAngle: 0,
       opacityAngle: 0,
@@ -500,7 +541,9 @@ const DotIcon = ({
       cx: motionValue(p.sx),
       cy: motionValue(p.sy),
       r: motionValue(p.size / 2),
-      opacity: motionValue(quantizeFloat(clamp(opa[i], 0, 1))),
+      opacity: motionValue(
+        isCountChange ? 0 : quantizeFloat(clamp(opa[i], 0, 1)),
+      ),
     }));
     opacityTransitionRef.current = null;
   }
@@ -518,10 +561,19 @@ const DotIcon = ({
     };
   }, [effectiveState, time]);
 
+  // When the dot count changes, animate outgoing dots to opacity 0 once.
+  // Motion's scheduler handles the timing — no per-frame work needed here.
+  useEffect(() => {
+    const outgoing = outgoingRef.current;
+    if (!outgoing) return;
+    for (const mv of outgoing) {
+      animate(mv.opacity, 0, { duration: OUTGOING_DURATION, ease: "easeOut" });
+    }
+  }, [effectiveDotCount]);
+
   useMotionValueEvent(time, "change", (ms) => {
     const key = stateRef.current;
     const def = statesRef.current[key];
-    const cfg = configRef.current;
     const mvs = targetsRef.current!;
     const t = (ms - phaseStartMsRef.current) / 1000;
 
@@ -530,7 +582,7 @@ const DotIcon = ({
       ? (def.opacitySpeed ?? def.layoutSpeed ?? 0) * t
       : 0;
 
-    const proj = def.layout(layoutAngle).map((v) => project(v, cfg));
+    const proj = def.layout(layoutAngle).map((v) => project(v, def.projConfig));
     const opa = resolveOpacities(def.opacities, {
       layoutAngle,
       opacityAngle,
@@ -589,8 +641,16 @@ const DotIcon = ({
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: "visible" }}
       >
+        {outgoingRef.current?.map((mv, i) => (
+          <DotCircle
+            key={`out-${i}`}
+            mv={mv}
+            i={i}
+            dotCount={outgoingRef.current!.length}
+          />
+        ))}
         {targetMvs.map((mv, i) => (
-          <DotCircle key={i} mv={mv} i={i} dotCount={config.dotCount} />
+          <DotCircle key={i} mv={mv} i={i} dotCount={targetMvs.length} />
         ))}
       </svg>
     </div>

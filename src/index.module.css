@@ -93,7 +93,7 @@
   border: 1px solid var(--ui-border);
   gap: 0;
   overflow: clip;
-  border-radius: 5px;
+  border-radius: 99em;
 }
 
 .stateButton {
@@ -112,6 +112,10 @@
   user-select: none;
   &:last-child {
     border-right: none;
+    padding-right: 1.25rlh;
+  }
+  &:first-child {
+    padding-left: 1.25rlh;
   }
 }
 
@@ -280,7 +284,7 @@
   background-position: calc(1rlh - 1px) calc(1rlh - 1px);
   display: flex;
   flex-direction: column;
-  box-shadow: 0px 0px 0px 1px var(--ui-border) inset;
+  border: 1px solid var(--ui-border);
   span {
     color: var(--ui-tertiary);
     font-size: 0.6rlh;
@@ -297,7 +301,7 @@
     flex: 1 0 auto;
     gap: 1rlh;
     &:not(:first-child) {
-      box-shadow: 0px 1px 0px 0 var(--ui-border) inset;
+      border-top: 1px solid var(--ui-border);
     }
   }
 }
@@ -311,6 +315,7 @@
 
 .inSitu {
   gap: 0;
+  border: 1px solid var(--ui-border);
 }
 
 /* .inSituGrid {
@@ -427,6 +432,14 @@
 }
 
 .cardSocial {
-  background: #16a34a;
+  background:
+    url("../src/assets/brand-gradient.png") no-repeat center center,
+    linear-gradient(in hsl, #1e91af, hsla(205, 86%, 47%, 0.068));
+  background-size: cover;
+  background-position: 50% 70%;
+  background-size: 300%;
   color: #fff;
+  & svg {
+    mix-blend-mode: plus-lighter;
+  }
 }

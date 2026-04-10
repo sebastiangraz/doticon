@@ -20,13 +20,13 @@ Paint order: no depth-based paint ordering (no Z-sort). SVG circles render in st
 
 `buildStates(config)` returns `Record<StateKey, StateDef>`, rebuilt whenever `GridConfig` changes. State-specific precomputed data (sphere points, loading order, dormant opacities) is closed over inside `buildStates` — private to each state, invisible to `GridConfig`.
 
-`StateDef` has: `label`, `layout(angle?) → Vec3[]`, `opacities: number[] | ((ctx: OpacitySolveCtx) => number[])`, `animated`, optional `layoutSpeed` (rad/s for 3D spin), optional `opacitySpeed` (rad/s for opacity phase; defaults to `layoutSpeed` when omitted).
+`StateDef` has: `label`, `layout(angle?) → Vec3[]`, `opacities: number[] | ((ctx: OpacitySolveCtx) => number[])`, `animated`, `projConfig: GridConfig` (the coordinate space used to project this state's layout into SVG — may differ from the component's base config), optional `layoutSpeed` (rad/s for 3D spin), optional `opacitySpeed` (rad/s for opacity phase; defaults to `layoutSpeed` when omitted).
 
 `OpacitySolveCtx = { layoutAngle, opacityAngle }` — two independent phase angles passed to functional opacities. `resolveOpacities()` normalises both static arrays and functions.
 
 Three states exist (`StateKey = "dormant" | "thinking" | "loading"`); more can be added by registering one entry in `buildStates` plus layout/opacity definitions:
 
-**Dormant** — static logotype pattern. A 7×7 master grid (`DORMANT_MASTER`) encodes dim (0.12), half (0.45), and full (1) opacities in a diagonal motif. Any grid size other than 7 is derived via nearest-neighbour downsampling from this master (`buildDormantOpacities`). The 4×4 size has a full hand-crafted override: `DORMANT_4x4_OPACITIES` for per-dot opacity and `DORMANT_4x4_Z` for per-dot Z (dot-size control). All other sizes place every dot at `gridBaseZ(config)`. Not animated.
+**Dormant** — static logotype pattern. A 7×7 master grid (`DORMANT_MASTER`) encodes dim (0.12), half (0.45), and full (1) opacities in a diagonal motif. Any grid size other than 7 is derived via nearest-neighbour downsampling from this master (`buildDormantOpacities`). Two sizes have full hand-crafted overrides: `DORMANT_4x4_OPACITIES`/`DORMANT_4x4_Z` for grid=4 (the default), and `DORMANT_3x3_OPACITIES`/`DORMANT_3x3_Z` for grid=3 (the small tier). **Size-tier mental model: 3×3 = small, 4×4 = default, 5×5+ = custom.** Despite the "3×3" label, `DORMANT_3x3_*` arrays each hold 16 values because Dormant at grid=3 renders internally as 4×4 (16 dots) — `buildStates` computes `dormantProjConfig = buildGridConfig(4)` when `config.n === 3` and sets it as the state's `projConfig`. All other states at grid=3 continue to use a genuine 3×3 (9 dots). Switching between dormant (16 dots) and another state (9 dots) at grid=3 triggers a full target rebuild, identical to a grid prop change. All other sizes place every dot at `gridBaseZ(config)`. Not animated.
 
 **Thinking** — Fibonacci sphere. `buildSphereBase(config)` distributes `dotCount` points on a unit sphere. While active, the sphere is rotated by `layoutAngle` via `rotateY`. Z is mapped onto `[0, baseZ]` with `baseZ * (0.5 + 0.5 * r.z)` so front dots match the grid's target size and size variation scales down with grid density. Opacities combine a sine wave along the spiral index (phased by `opacityAngle`) with a back-face depth fade from `rotateY(sphereBase[i], layoutAngle).z`. `layoutSpeed = 3`, `opacitySpeed = 4`.
 
@@ -48,7 +48,7 @@ Stagger: per-dot spring variation (later dots are slightly heavier/softer) creat
 
 ## Props:
 
-`size` (px, default 200), `state` (`StateKey`, default `"dormant"`), `grid` (integer N for N×N, default 4), `color`, `style`.
+`size` (px, default 200), `state` (`StateKey`, default `"dormant"`), `grid` (integer N for N×N, default 4; note: when `state="dormant"` and `grid=3` the internal layout is 4×4 — see Dormant size-tier model above), `color`, `style`.
 
 Exports: `StateKey`, `STATE_KEYS`, `getStateLabel`.
 
