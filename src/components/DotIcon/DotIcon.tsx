@@ -161,7 +161,7 @@ const DotIcon = ({
   }, [outgoing]);
 
   // ─── State / grid transitions ─────────────────────────────────────────
-  useEffect(() => {
+  useLayoutEffect(() => {
     phaseStartMsRef.current = time.get();
     prevMsRef.current = time.get();
 
