@@ -213,13 +213,14 @@ const loadingOpacities = (
 // Hover: a sine pulse travels an invisible S-path (mirrored Z with serifs)
 // through the grid. Each dot's rank is its nearest-point arc-length along the
 // polyline, normalized to [0,1]. Works uniformly for any grid size.
-const HOVER_SPEED = 0.4;
-const HOVER_PULSE_WIDTH = 0.4;
+const HOVER_SPEED = 0.7;
+const HOVER_PULSE_WIDTH = 0.8;
 const HOVER_NUM_WAVES = 1;
 
 // mirrored Z-path waypoints in normalized [0,1] space.
 // prettier-ignore
 const HOVER_PATH: { x: number; y: number }[] = [
+  { x: 1.5, y: 0 } ,  // idle
   { x: 1, y: 0 },  // top-right
   { x: 0, y: 0 },  // top-left      (←)
   { x: 1, y: 1 },  // bottom-right  (↘ spine)
