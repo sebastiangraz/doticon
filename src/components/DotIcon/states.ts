@@ -189,41 +189,43 @@ const loadingOpacities = (
   });
 };
 
-// Hover: dormant spatial Z / opacity with a quadrant-staggered loading-style tail.
-// Quadrants (split at floor(n/2) on both axes): TR → TL → BR → BL.
-// Row direction within a column: TR & BL bottom→top; TL & BR top→bottom.
-// Column order within a quadrant: TR, TL, BL right→left; BR left→right.
-const HOVER_PAUSE = 5;
+// Hover: 4 quadrants pulse in S-shaped sequence (TR → TL → BR → BL).
+// Within each quadrant, columns stagger slightly to infer sweep direction:
+// top half right→left, bottom half left→right, like drawing an S.
+const HOVER_SPEED = 0.4;
+const HOVER_QUADRANT_STAGGER = 0.14;
+const HOVER_INTRA_STAGGER = 0.15;
+const HOVER_PULSE_WIDTH = 0.4;
 
 const buildHoverRanks = (n: number): number[] => {
-  const dotCount = n * n;
-  const ranks = new Array<number>(dotCount);
-  if (n <= 0) return ranks;
-  if (n === 1) {
-    ranks[0] = 0;
-    return ranks;
-  }
-  let rank = 0;
-  const xSplit = Math.floor(n / 2);
-  const ySplit = Math.floor(n / 2);
+  const split = Math.floor(n / 2);
+  return Array.from({ length: n * n }, (_, i) => {
+    const x = i % n;
+    const y = Math.floor(i / n);
 
-  for (let x = n - 1; x >= xSplit; x--)
-    for (let y = ySplit - 1; y >= 0; y--) ranks[y * n + x] = rank++;
+    let q: number;
+    if (y < split && x >= split) q = 0;
+    else if (y < split && x < split) q = 1;
+    else if (y >= split && x >= split) q = 2;
+    else q = 3;
 
-  for (let x = xSplit - 1; x >= 0; x--)
-    for (let y = 0; y < ySplit; y++) ranks[y * n + x] = rank++;
+    const qLeft = q === 0 || q === 2 ? split : 0;
+    const qRight = q === 0 || q === 2 ? n - 1 : split - 1;
+    const qWidth = qRight - qLeft;
+    const colNorm = qWidth > 0 ? (x - qLeft) / qWidth : 0;
 
-  for (let x = xSplit; x < n; x++)
-    for (let y = ySplit; y < n; y++) ranks[y * n + x] = rank++;
+    // Top: right→left (high x leads), BR: left→right, BL: right→left
+    const intra = q === 2 ? colNorm : 1 - colNorm;
 
-  for (let x = xSplit - 1; x >= 0; x--)
-    for (let y = n - 1; y >= ySplit; y--) ranks[y * n + x] = rank++;
-
-  return ranks;
+    return q * HOVER_QUADRANT_STAGGER + intra * HOVER_INTRA_STAGGER;
+  });
 };
 
-const hoverAge = (angle: number, rank: number, cycle: number): number =>
-  angle < rank ? Infinity : (angle - rank) % cycle;
+const hoverPulse = (phase: number, rank: number): number => {
+  const t = (((phase - rank) % 1) + 1) % 1;
+  if (t >= HOVER_PULSE_WIDTH) return 0;
+  return Math.sin((t / HOVER_PULSE_WIDTH) * Math.PI);
+};
 
 const hoverLayout = (
   proj: GridConfig,
@@ -231,17 +233,13 @@ const hoverLayout = (
   baseZ: readonly number[],
   angle = 0,
 ): Vec3[] => {
-  const trail = proj.dotCount - 1;
-  const cycle = proj.dotCount + HOVER_PAUSE;
+  const phase = ((angle % 1) + 1) % 1;
   return Array.from({ length: proj.dotCount }, (_, i) => {
     const x = i % proj.n;
     const y = Math.floor(i / proj.n);
     const bz = baseZ[i]!;
-    const trailZ = Math.max(0, bz - 2);
-    const age = hoverAge(angle, ranks[i]!, cycle);
-    if (age === Infinity || age >= proj.dotCount) return { x, y, z: bz };
-    const t = Math.min(age / trail, 1);
-    return { x, y, z: lerp(bz, trailZ, t) };
+    const p = hoverPulse(phase, ranks[i]!);
+    return { x, y, z: lerp(bz, Math.max(0, bz - 2), p) };
   });
 };
 
@@ -251,13 +249,10 @@ const hoverOpacities = (
   baseOpa: readonly number[],
   angle: number,
 ): number[] => {
-  const trail = proj.dotCount - 1;
-  const cycle = proj.dotCount + HOVER_PAUSE;
+  const phase = ((angle % 1) + 1) % 1;
   return Array.from({ length: proj.dotCount }, (_, i) => {
-    const base = baseOpa[i]!;
-    const age = hoverAge(angle, ranks[i]!, cycle);
-    if (age === Infinity || age >= proj.dotCount) return base;
-    return lerp(base, 0.12, Math.min(age / trail, 1));
+    const p = hoverPulse(phase, ranks[i]!);
+    return lerp(baseOpa[i]!, 0.12, p);
   });
 };
 
@@ -533,7 +528,7 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       opacities: (ctx) =>
         hoverOpacities(dormantProj, hoverRanks, dormantOpa, ctx.opacityAngle),
       animated: true,
-      layoutSpeed: 16,
+      layoutSpeed: HOVER_SPEED,
       projConfig: dormantProj,
     },
     error: {
