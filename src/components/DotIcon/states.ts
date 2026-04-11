@@ -14,25 +14,46 @@ import {
 // neighbour; 3×3 and 4×4 have hand-crafted overrides for full designer control.
 
 const DORMANT_MASTER_N = 7;
+// prettier-ignore
 const DORMANT_MASTER: readonly number[] = [
-  0.12, 1, 1, 0.12, 1, 1, 1, 1, 0.45, 1, 1, 0.12, 1, 1, 1, 1, 0.45, 1, 1, 0.12,
-  1, 0.12, 1, 1, 0.45, 1, 1, 0.12, 1, 0.12, 1, 1, 0.45, 1, 1, 1, 1, 0.12, 1, 1,
-  0.45, 1, 1, 1, 1, 0.12, 1, 1, 0.12,
+  0.12, 1,    1,    0.12, 1,    1,    1,
+  1,    0.45, 1,    1,    0.12, 1,    1,
+  1,    1,    0.45, 1,    1,    0.12, 1,
+  0.12, 1,    1,    0.45, 1,    1,    0.12,
+  1,    0.12, 1,    1,    0.45, 1,    1,
+  1,    1,    0.12, 1,    1,    0.45, 1,
+  1,    1,    1,    0.12, 1,    1,    0.12,
 ];
 
 // Grid=3 renders internally as 4×4, so arrays hold 16 values.
+// prettier-ignore
 const DORMANT_3x3_OPACITIES: readonly number[] = [
-  0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0,
+  0, 1, 0, 1,
+  1, 0, 1, 0,
+  0, 1, 0, 1,
+  1, 0, 1, 0,
 ];
+// prettier-ignore
 const DORMANT_3x3_Z: readonly number[] = [
-  1, 3, 1, 3, 3, 1, 4, 1, 1, 4, 1, 3, 3, 1, 3, 1,
+  1, 3, 1, 3,
+  3, 1, 4, 1,
+  1, 4, 1, 3,
+  3, 1, 3, 1,
 ];
 
+// prettier-ignore
 const DORMANT_4x4_OPACITIES: readonly number[] = [
-  0.12, 1, 0.12, 1, 1, 0.45, 1, 0.12, 0.12, 1, 0.45, 1, 1, 0.12, 1, 0.12,
+  0.12, 1,    0.12, 1,
+  1,    0.45, 1,    0.12,
+  0.12, 1,    0.45, 1,
+  1,    0.12, 1,    0.12,
 ];
+// prettier-ignore
 const DORMANT_4x4_Z: readonly number[] = [
-  1, 2, 2, 2, 2, 2, 3, 2, 2, 3, 2, 2, 2, 2, 2, 1,
+  1, 2, 2, 2,
+  2, 2, 3, 2,
+  2, 3, 2, 2,
+  2, 2, 2, 1,
 ];
 
 const buildDormantOpacities = (n: number): number[] => {
@@ -251,8 +272,10 @@ const hoverOpacities = (
 ): number[] => {
   const phase = ((angle % 1) + 1) % 1;
   return Array.from({ length: proj.dotCount }, (_, i) => {
+    const base = baseOpa[i]!;
+    if (base === 0) return 0;
     const p = hoverPulse(phase, ranks[i]!);
-    return lerp(baseOpa[i]!, 0.12, p);
+    return lerp(base, 0.12, p);
   });
 };
 
