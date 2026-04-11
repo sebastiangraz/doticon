@@ -210,64 +210,84 @@ const loadingOpacities = (
   });
 };
 
-// Hover: a sine pulse travels an invisible S-path (mirrored Z with serifs)
-// through the grid. Each dot's rank is its nearest-point arc-length along the
-// polyline, normalized to [0,1]. Works uniformly for any grid size.
+// Hover: mirrored-Z. Pure Euclidean Voronoi of this path gives two triangles + a
+// parallelogram whose spine edge is *not* 45°; a separate |x−y| corridor fixes
+// the spine but the hand-off to the caps must still use geometry that depends
+// on both x and y (nearest of the three segments), or you get rank = f(x) on
+// horizontals and flat TR/BL cuts. On a square integer grid, oblique region
+// edges always look slightly stepped unless you soften the pulse in rank/α.
 const HOVER_SPEED = 0.4;
-const HOVER_PULSE_WIDTH = 0.05;
+const HOVER_PULSE_WIDTH = 0.4;
 const HOVER_NUM_WAVES = 1;
+const HOVER_SPINE_CORRIDOR = 0.4;
 
-// S-path waypoints in normalized [0,1] space.
 // prettier-ignore
 const HOVER_PATH: { x: number; y: number }[] = [
   { x: 1, y: 0 },  // top-right
-  { x: 0, y: 0 },  // top-left
-  { x: 1, y: 1 },  // bottom-right
-  { x: 0, y: 1 },  // bottom-left
+  { x: 0, y: 0 },  // top-left      (←)
+  { x: 1, y: 1 },  // bottom-right  (↘ spine)
+  { x: 0, y: 1 },  // bottom-left   (←)
 ];
 
 const buildHoverRanks = (n: number): number[] => {
   const max = n - 1;
+  if (max <= 0) return Array.from({ length: n * n }, () => 0);
   const pts = HOVER_PATH.map((p) => ({ x: p.x * max, y: p.y * max }));
 
   const segLens: number[] = [];
   let totalLen = 0;
+  let spineIdx = -1;
+  let spineCumLen = 0;
   for (let i = 1; i < pts.length; i++) {
     const dx = pts[i].x - pts[i - 1].x;
     const dy = pts[i].y - pts[i - 1].y;
     const len = Math.sqrt(dx * dx + dy * dy);
     segLens.push(len);
+    if (Math.abs(dx) > 1e-6 && Math.abs(dy) > 1e-6 && spineIdx < 0) {
+      spineIdx = i - 1;
+      spineCumLen = totalLen;
+    }
     totalLen += len;
   }
+
+  const spineLen = spineIdx >= 0 ? segLens[spineIdx] : 0;
 
   return Array.from({ length: n * n }, (_, idx) => {
     const dotX = idx % n;
     const dotY = Math.floor(idx / n);
 
-    let bestDist = Infinity;
+    const corridor = max * HOVER_SPINE_CORRIDOR;
+    const inSpineStrip = Math.abs(dotX - dotY) <= corridor;
+
     let bestArc = 0;
-    let cumLen = 0;
-
-    for (let s = 0; s < segLens.length; s++) {
-      const ax = pts[s].x,
-        ay = pts[s].y;
-      const dx = pts[s + 1].x - ax,
-        dy = pts[s + 1].y - ay;
-      const len = segLens[s];
-      const t =
-        len > 0
-          ? clamp(((dotX - ax) * dx + (dotY - ay) * dy) / (len * len), 0, 1)
-          : 0;
-
-      const px = ax + t * dx;
-      const py = ay + t * dy;
-      const dist = Math.sqrt((dotX - px) ** 2 + (dotY - py) ** 2);
-
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestArc = cumLen + t * len;
+    if (inSpineStrip) {
+      const t = clamp((dotX + dotY) / (2 * max), 0, 1);
+      bestArc = spineCumLen + t * spineLen;
+    } else {
+      let bestDist = Infinity;
+      let arc = 0;
+      let cum = 0;
+      for (let s = 0; s < 3; s++) {
+        const ax = pts[s].x,
+          ay = pts[s].y;
+        const bx = pts[s + 1].x,
+          by = pts[s + 1].y;
+        const dx = bx - ax,
+          dy = by - ay;
+        const len = segLens[s];
+        const len2 = len * len;
+        const t =
+          len2 > 0
+            ? clamp(((dotX - ax) * dx + (dotY - ay) * dy) / len2, 0, 1)
+            : 0;
+        const dist = Math.hypot(dotX - (ax + t * dx), dotY - (ay + t * dy));
+        if (dist < bestDist) {
+          bestDist = dist;
+          arc = cum + t * len;
+        }
+        cum += len;
       }
-      cumLen += len;
+      bestArc = arc;
     }
 
     return totalLen > 0 ? bestArc / totalLen : 0;
@@ -293,11 +313,13 @@ const hoverLayout = (
 ): Vec3[] => {
   const phase = ((angle % 1) + 1) % 1;
   return Array.from({ length: proj.dotCount }, (_, i) => {
-    const x = i % proj.n;
-    const y = Math.floor(i / proj.n);
     const bz = baseZ[i]!;
-    const p = hoverPulse(phase, ranks[i]!);
-    return { x, y, z: lerp(bz, Math.max(0, bz - 2), p) };
+    const p = hoverPulse(phase, ranks[i]);
+    return {
+      x: i % proj.n,
+      y: Math.floor(i / proj.n),
+      z: lerp(bz, Math.max(0, bz - 2), p),
+    };
   });
 };
 
@@ -311,7 +333,7 @@ const hoverOpacities = (
   return Array.from({ length: proj.dotCount }, (_, i) => {
     const base = baseOpa[i]!;
     if (base === 0) return 0;
-    const p = hoverPulse(phase, ranks[i]!);
+    const p = hoverPulse(phase, ranks[i]);
     return lerp(base, 0.12, p);
   });
 };
