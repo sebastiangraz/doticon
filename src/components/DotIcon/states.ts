@@ -55,6 +55,7 @@ const STATE_META = {
   dormant: { label: "Dormant" },
   thinking: { label: "Thinking" },
   loading: { label: "Loading" },
+  hover: { label: "Hover" },
   error: { label: "Error" },
   indexing: { label: "Indexing" },
   dev: { label: "Dev" },
@@ -185,6 +186,78 @@ const loadingOpacities = (
     const age = loadingAge(angle, ranks[i], cycle);
     if (age >= config.dotCount) return 0.12;
     return lerp(1, 0.12, Math.min(age / trail, 1));
+  });
+};
+
+// Hover: dormant spatial Z / opacity with a quadrant-staggered loading-style tail.
+// Quadrants (split at floor(n/2) on both axes): TR → TL → BR → BL.
+// Row direction within a column: TR & BL bottom→top; TL & BR top→bottom.
+// Column order within a quadrant: TR, TL, BL right→left; BR left→right.
+const HOVER_PAUSE = 5;
+
+const buildHoverRanks = (n: number): number[] => {
+  const dotCount = n * n;
+  const ranks = new Array<number>(dotCount);
+  if (n <= 0) return ranks;
+  if (n === 1) {
+    ranks[0] = 0;
+    return ranks;
+  }
+  let rank = 0;
+  const xSplit = Math.floor(n / 2);
+  const ySplit = Math.floor(n / 2);
+
+  for (let x = n - 1; x >= xSplit; x--)
+    for (let y = ySplit - 1; y >= 0; y--) ranks[y * n + x] = rank++;
+
+  for (let x = xSplit - 1; x >= 0; x--)
+    for (let y = 0; y < ySplit; y++) ranks[y * n + x] = rank++;
+
+  for (let x = xSplit; x < n; x++)
+    for (let y = ySplit; y < n; y++) ranks[y * n + x] = rank++;
+
+  for (let x = xSplit - 1; x >= 0; x--)
+    for (let y = n - 1; y >= ySplit; y--) ranks[y * n + x] = rank++;
+
+  return ranks;
+};
+
+const hoverAge = (angle: number, rank: number, cycle: number): number =>
+  angle < rank ? Infinity : (angle - rank) % cycle;
+
+const hoverLayout = (
+  proj: GridConfig,
+  ranks: number[],
+  baseZ: readonly number[],
+  angle = 0,
+): Vec3[] => {
+  const trail = proj.dotCount - 1;
+  const cycle = proj.dotCount + HOVER_PAUSE;
+  return Array.from({ length: proj.dotCount }, (_, i) => {
+    const x = i % proj.n;
+    const y = Math.floor(i / proj.n);
+    const bz = baseZ[i]!;
+    const trailZ = Math.max(0, bz - 2);
+    const age = hoverAge(angle, ranks[i]!, cycle);
+    if (age === Infinity || age >= proj.dotCount) return { x, y, z: bz };
+    const t = Math.min(age / trail, 1);
+    return { x, y, z: lerp(bz, trailZ, t) };
+  });
+};
+
+const hoverOpacities = (
+  proj: GridConfig,
+  ranks: number[],
+  baseOpa: readonly number[],
+  angle: number,
+): number[] => {
+  const trail = proj.dotCount - 1;
+  const cycle = proj.dotCount + HOVER_PAUSE;
+  return Array.from({ length: proj.dotCount }, (_, i) => {
+    const base = baseOpa[i]!;
+    const age = hoverAge(angle, ranks[i]!, cycle);
+    if (age === Infinity || age >= proj.dotCount) return base;
+    return lerp(base, 0.12, Math.min(age / trail, 1));
   });
 };
 
@@ -414,6 +487,8 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const dormantZ =
     config.n === 3 ? DORMANT_3x3_Z : config.n === 4 ? DORMANT_4x4_Z : null;
   const dormantOpa = buildDormantOpacities(config.n);
+  const hoverBaseZ = flatGrid(dormantProj, dormantZ).map((p) => p.z);
+  const hoverRanks = buildHoverRanks(dormantProj.n);
   const sphere = buildSphereBase(config);
   const ranks = buildLoadingRanks(config);
   const errorData = buildErrorData(config);
@@ -451,6 +526,15 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       animated: true,
       layoutSpeed: 16,
       projConfig: config,
+    },
+    hover: {
+      label: STATE_META.hover.label,
+      layout: (a = 0) => hoverLayout(dormantProj, hoverRanks, hoverBaseZ, a),
+      opacities: (ctx) =>
+        hoverOpacities(dormantProj, hoverRanks, dormantOpa, ctx.opacityAngle),
+      animated: true,
+      layoutSpeed: 16,
+      projConfig: dormantProj,
     },
     error: {
       label: STATE_META.error.label,
