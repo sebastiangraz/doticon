@@ -210,42 +210,79 @@ const loadingOpacities = (
   });
 };
 
-// Hover: 4 quadrants pulse in S-shaped sequence (TR → TL → BR → BL).
-// Within each quadrant, columns stagger slightly to infer sweep direction:
-// top half right→left, bottom half left→right, like drawing an S.
+// Hover: a sine pulse travels an invisible S-path (mirrored Z with serifs)
+// through the grid. Each dot's rank is its nearest-point arc-length along the
+// polyline, normalized to [0,1]. Works uniformly for any grid size.
 const HOVER_SPEED = 0.4;
-const HOVER_QUADRANT_STAGGER = 0.14;
-const HOVER_INTRA_STAGGER = 0.15;
-const HOVER_PULSE_WIDTH = 0.4;
+const HOVER_PULSE_WIDTH = 0.05;
+const HOVER_NUM_WAVES = 1;
+
+// S-path waypoints in normalized [0,1] space.
+// prettier-ignore
+const HOVER_PATH: { x: number; y: number }[] = [
+  { x: 1, y: 0 },  // top-right
+  { x: 0, y: 0 },  // top-left
+  { x: 1, y: 1 },  // bottom-right
+  { x: 0, y: 1 },  // bottom-left
+];
 
 const buildHoverRanks = (n: number): number[] => {
-  const split = Math.floor(n / 2);
-  return Array.from({ length: n * n }, (_, i) => {
-    const x = i % n;
-    const y = Math.floor(i / n);
+  const max = n - 1;
+  const pts = HOVER_PATH.map((p) => ({ x: p.x * max, y: p.y * max }));
 
-    let q: number;
-    if (y < split && x >= split) q = 0;
-    else if (y < split && x < split) q = 1;
-    else if (y >= split && x >= split) q = 2;
-    else q = 3;
+  const segLens: number[] = [];
+  let totalLen = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i - 1].x;
+    const dy = pts[i].y - pts[i - 1].y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    segLens.push(len);
+    totalLen += len;
+  }
 
-    const qLeft = q === 0 || q === 2 ? split : 0;
-    const qRight = q === 0 || q === 2 ? n - 1 : split - 1;
-    const qWidth = qRight - qLeft;
-    const colNorm = qWidth > 0 ? (x - qLeft) / qWidth : 0;
+  return Array.from({ length: n * n }, (_, idx) => {
+    const dotX = idx % n;
+    const dotY = Math.floor(idx / n);
 
-    // Top: right→left (high x leads), BR: left→right, BL: right→left
-    const intra = q === 2 ? colNorm : 1 - colNorm;
+    let bestDist = Infinity;
+    let bestArc = 0;
+    let cumLen = 0;
 
-    return q * HOVER_QUADRANT_STAGGER + intra * HOVER_INTRA_STAGGER;
+    for (let s = 0; s < segLens.length; s++) {
+      const ax = pts[s].x,
+        ay = pts[s].y;
+      const dx = pts[s + 1].x - ax,
+        dy = pts[s + 1].y - ay;
+      const len = segLens[s];
+      const t =
+        len > 0
+          ? clamp(((dotX - ax) * dx + (dotY - ay) * dy) / (len * len), 0, 1)
+          : 0;
+
+      const px = ax + t * dx;
+      const py = ay + t * dy;
+      const dist = Math.sqrt((dotX - px) ** 2 + (dotY - py) ** 2);
+
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestArc = cumLen + t * len;
+      }
+      cumLen += len;
+    }
+
+    return totalLen > 0 ? bestArc / totalLen : 0;
   });
 };
 
 const hoverPulse = (phase: number, rank: number): number => {
-  const t = (((phase - rank) % 1) + 1) % 1;
-  if (t >= HOVER_PULSE_WIDTH) return 0;
-  return Math.sin((t / HOVER_PULSE_WIDTH) * Math.PI);
+  let best = 0;
+  for (let w = 0; w < HOVER_NUM_WAVES; w++) {
+    const t = (((phase + w / HOVER_NUM_WAVES - rank) % 1) + 1) % 1;
+    if (t < HOVER_PULSE_WIDTH) {
+      best = Math.max(best, Math.sin((t / HOVER_PULSE_WIDTH) * Math.PI));
+    }
+  }
+  return best;
 };
 
 const hoverLayout = (
