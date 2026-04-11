@@ -74,9 +74,9 @@ const buildDormantOpacities = (n: number): number[] => {
 
 const STATE_META = {
   dormant: { label: "Dormant" },
+  hover: { label: "Hover" },
   thinking: { label: "Thinking" },
   loading: { label: "Loading" },
-  hover: { label: "Hover" },
   error: { label: "Error" },
   indexing: { label: "Indexing" },
   dev: { label: "Dev" },
@@ -565,6 +565,15 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       animated: false,
       projConfig: dormantProj,
     },
+    hover: {
+      label: STATE_META.hover.label,
+      layout: (a = 0) => hoverLayout(dormantProj, hoverRanks, hoverBaseZ, a),
+      opacities: (ctx) =>
+        hoverOpacities(dormantProj, hoverRanks, dormantOpa, ctx.opacityAngle),
+      animated: true,
+      layoutSpeed: HOVER_SPEED,
+      projConfig: dormantProj,
+    },
     thinking: {
       label: STATE_META.thinking.label,
       layout: (a = 0) => thinkingLayout(config, sphere, a),
@@ -583,15 +592,7 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       layoutSpeed: 16,
       projConfig: config,
     },
-    hover: {
-      label: STATE_META.hover.label,
-      layout: (a = 0) => hoverLayout(dormantProj, hoverRanks, hoverBaseZ, a),
-      opacities: (ctx) =>
-        hoverOpacities(dormantProj, hoverRanks, dormantOpa, ctx.opacityAngle),
-      animated: true,
-      layoutSpeed: HOVER_SPEED,
-      projConfig: dormantProj,
-    },
+
     error: {
       label: STATE_META.error.label,
       layout: (a = 0) => errorLayout(config, errorData, a),
