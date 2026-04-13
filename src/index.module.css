@@ -28,11 +28,6 @@
   }
 }
 
-.guidelinesPage {
-  width: 100%;
-  min-height: 40vh;
-}
-
 .controlsRow {
   /* max-width: 720px; */
   display: flex;

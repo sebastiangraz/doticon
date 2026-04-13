@@ -3,6 +3,11 @@ import styles from "../../index.module.css";
 
 export const Route = createFileRoute("/_shell/guidelines")({
   component: () => (
-    <main className={styles.guidelinesPage} aria-label="Guidelines" />
+    <>
+      <h1>Guidelines</h1>
+      <p>
+        Lorem ipsum dolor sit amet consectetur adipisicing elit. Quisquam, quos.
+      </p>
+    </>
   ),
 });

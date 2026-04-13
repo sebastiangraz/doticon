@@ -1,5 +1,5 @@
 .canvas {
-  position: absolute;
+  position: fixed;
   pointer-events: none;
   z-index: -1;
   top: 0;
