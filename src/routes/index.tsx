@@ -92,7 +92,7 @@ export const Route = createFileRoute("/")({
                   title="Toggle dark mode"
                 >
                   <svg
-                    className={styles.themeToggleIconMoon}
+                    className={styles.themeToggleMoon}
                     width="100%"
                     height="auto"
                     viewBox="0 0 24 24"
@@ -107,7 +107,7 @@ export const Route = createFileRoute("/")({
                     />
                   </svg>
                   <svg
-                    className={styles.themeToggleIconSun}
+                    className={styles.themeToggleSun}
                     width="100%"
                     height="auto"
                     viewBox="0 0 24 24"
@@ -123,14 +123,14 @@ export const Route = createFileRoute("/")({
                   </svg>
                 </label>
               </div>
-              <button type="button" className={styles.UIToggle}>
+              <button type="button" className={styles.toggle}>
                 <input
-                  className={styles.UIToggleInput}
+                  className={styles.toggleInput}
                   id="guidelines-toggle"
                   type="checkbox"
                 />
                 <label
-                  className={styles.UIToggleButton}
+                  className={styles.toggleButton}
                   htmlFor="guidelines-toggle"
                 >
                   Guidelines

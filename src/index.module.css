@@ -224,7 +224,7 @@
   text-align: right;
 }
 
-.themeToggle {
+.toggle {
   z-index: 10;
   display: inline-flex;
   align-items: center;
@@ -235,7 +235,7 @@
   backdrop-filter: blur(10px);
 }
 
-.themeToggleInput {
+.toggleInput {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -243,10 +243,16 @@
   pointer-events: none;
 }
 
-.themeToggleButton {
+.toggleButton {
+  font-family:
+    "Sohne Mono", "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
   display: inline-grid;
   place-items: center;
-  width: 24px;
+  width: auto;
+  padding: 2px 8px;
   height: 24px;
   border-radius: 999px;
   cursor: pointer;
@@ -258,47 +264,47 @@
     transform 0.15s ease;
 }
 
-.themeToggleButton:hover {
+.toggleButton:hover {
   background: var(--ui-border);
   color: var(--ui-foreground);
 }
 
-.themeToggleInput:focus-visible + .themeToggleButton {
+.toggleInput:focus-visible + .toggleButton {
   outline: 2px solid var(--ui-border);
   outline-offset: 2px;
 }
 
-.themeToggleIconMoon,
-.themeToggleIconSun {
+.themeToggle {
+  composes: toggle;
+}
+
+.themeToggleInput {
+  composes: toggleInput;
+}
+
+.themeToggleButton {
+  composes: toggleButton;
+  width: 24px;
+  padding: initial;
+}
+
+.themeToggleMoon,
+.themeToggleSun {
   width: 16px;
   height: 16px;
   display: block;
 }
 
-.themeToggleIconSun {
+.themeToggleSun {
   display: none;
 }
 
-.themeToggleInput:checked + .themeToggleButton .themeToggleIconMoon {
+.themeToggleInput:checked + .themeToggleButton .themeToggleMoon {
   display: none;
 }
 
-.themeToggleInput:checked + .themeToggleButton .themeToggleIconSun {
+.themeToggleInput:checked + .themeToggleButton .themeToggleSun {
   display: block;
-}
-
-.UIToggle {
-  composes: themeToggle;
-}
-
-.UIToggleInput {
-  composes: themeToggleInput;
-}
-
-.UIToggleButton {
-  composes: themeToggleButton;
-  width: auto;
-  padding: 2px 8px;
 }
 
 .row {
