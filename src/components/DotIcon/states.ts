@@ -8,6 +8,7 @@ import {
   rotateY,
   lerp,
   clamp,
+  quantizeFloat,
 } from "./math";
 
 // ─── Dormant patterns ───────────────────────────────────────────────────────────
@@ -175,9 +176,10 @@ const thinkingOpacities = (
   });
 
 // Processing: 8 cube vertices first, then the same interior grid count on
-// every face (uneven remainder is skipped for faces, then stacked on corners so
-// dotCount is preserved). Rotation is sequential — one axis ramps π/2, hold,
-// other axis ramps π/2, hold — in layoutAngle space (no simultaneous blend).
+// every face (uneven remainder skipped for the balanced pass). Extra dots use
+// unique surface positions (edge midpoints, then denser face grids) — no two
+// dots share the same quantized XYZ. Rotation is sequential — one axis ramps
+// π/2, hold, other axis ramps π/2, hold — in layoutAngle space (no blend).
 const CUBE_CORNERS: readonly Vec3[] = [
   { x: -1, y: -1, z: -1 },
   { x: 1, y: -1, z: -1 },
@@ -200,6 +202,18 @@ const PROCESSING_FACE_MAP: readonly ((u: number, v: number) => Vec3)[] = [
   (u, v) => ({ x: u, y: -1, z: v }),
 ];
 
+// Midpoints of the 12 edges (exactly one coordinate 0, two are ±1). They do
+// not lie in the open face interiors used by interiorFaceGrid2D.
+// prettier-ignore
+const CUBE_EDGE_MIDPOINTS: readonly Vec3[] = [
+  { x: 0, y: -1, z: -1 }, { x: 0, y: -1, z: 1 }, { x: 0, y: 1, z: -1 }, { x: 0, y: 1, z: 1 },
+  { x: -1, y: 0, z: -1 }, { x: -1, y: 0, z: 1 }, { x: 1, y: 0, z: -1 }, { x: 1, y: 0, z: 1 },
+  { x: -1, y: -1, z: 0 }, { x: -1, y: 1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 },
+];
+
+const processingVecKey = (p: Vec3): string =>
+  `${quantizeFloat(p.x)},${quantizeFloat(p.y)},${quantizeFloat(p.z)}`;
+
 /** Evenly spaced grid strictly inside (-1,1)², row-major. */
 const interiorFaceGrid2D = (count: number): { u: number; v: number }[] => {
   if (count <= 0) return [];
@@ -218,27 +232,49 @@ const interiorFaceGrid2D = (count: number): { u: number; v: number }[] => {
 
 const buildProcessingCubeBase = (dotCount: number): Vec3[] => {
   const out: Vec3[] = [];
-  const nCorner = Math.min(8, dotCount);
-  for (let i = 0; i < nCorner; i++) out.push(CUBE_CORNERS[i]!);
-  if (dotCount <= 8) return out;
+  const used = new Set<string>();
 
-  // Only add face dots when every face can get the same count — avoids a lone
-  // dot on one face (e.g. 3×3) or 2+1+1+… splits (e.g. 4×4). Leftover slots
-  // stack on corners so length still matches dotCount.
+  const tryPush = (p: Vec3): boolean => {
+    const key = processingVecKey(p);
+    if (used.has(key)) return false;
+    used.add(key);
+    out.push(p);
+    return true;
+  };
+
+  const nCorner = Math.min(8, dotCount);
+  for (let i = 0; i < nCorner; i++) tryPush(CUBE_CORNERS[i]!);
+  if (out.length >= dotCount) return out;
+
   const remaining = dotCount - 8;
   const k = Math.floor(remaining / 6);
   for (let f = 0; f < 6; f++) {
     const map = PROCESSING_FACE_MAP[f]!;
     for (const { u, v } of interiorFaceGrid2D(k)) {
-      out.push(map(u, v));
+      tryPush(map(u, v));
     }
   }
 
-  let j = 0;
-  while (out.length < dotCount) {
-    out.push(CUBE_CORNERS[j % 8]!);
-    j++;
+  for (const p of CUBE_EDGE_MIDPOINTS) {
+    if (out.length >= dotCount) break;
+    tryPush(p);
   }
+
+  let denom = 2;
+  while (out.length < dotCount && denom < 512) {
+    for (let f = 0; f < 6 && out.length < dotCount; f++) {
+      const map = PROCESSING_FACE_MAP[f]!;
+      for (let r = 1; r <= denom && out.length < dotCount; r++) {
+        for (let c = 1; c <= denom && out.length < dotCount; c++) {
+          const u = -1 + (2 * c) / (denom + 1);
+          const v = -1 + (2 * r) / (denom + 1);
+          tryPush(map(u, v));
+        }
+      }
+    }
+    denom++;
+  }
+
   return out;
 };
 
@@ -257,7 +293,9 @@ const PROCESSING_SPIN_PHASE = 1.0;
 const PROCESSING_PAUSE_PHASE = 0.55;
 const PROCESSING_STEP = Math.PI / 2;
 
-const processingAxisAngles = (layoutAngle: number): { ax: number; ay: number } => {
+const processingAxisAngles = (
+  layoutAngle: number,
+): { ax: number; ay: number } => {
   const S = PROCESSING_SPIN_PHASE;
   const P = PROCESSING_PAUSE_PHASE;
   const T = 2 * (S + P);
@@ -313,8 +351,8 @@ const processingLayout = (
   return cube.map((pt) => {
     const r = rotateProcessing(pt, layoutAngle);
     return {
-      x: config.grid.center + r.x * config.grid.center * THINKING_OVERSHOOT,
-      y: config.grid.center + r.y * config.grid.center * THINKING_OVERSHOOT,
+      x: config.grid.center + r.x * config.grid.center,
+      y: config.grid.center + r.y * config.grid.center,
       z: baseZ * (0.5 + 0.6 * r.z),
     };
   });
