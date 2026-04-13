@@ -49,14 +49,16 @@ export const ExposeProps = ({
         const isSpan = child.type === "span";
 
         return (
-          <div key={index} style={{ display: "flex", flexDirection: "column" }}>
-            <div>{child}</div>
-            <span>
-              {!isSpan && "<"}
-              {child.type.displayName || child.type.name}{" "}
-              {formatProps(child.props, ignoreProps)}
-              {!isSpan && "/>"}
-            </span>
+          <div key={index}>
+            {child}
+            <div>
+              <span>
+                {!isSpan && "<"}
+                {child.type.displayName || child.type.name}{" "}
+                {formatProps(child.props, ignoreProps)}
+                {!isSpan && "/>"}
+              </span>
+            </div>
           </div>
         );
       })}

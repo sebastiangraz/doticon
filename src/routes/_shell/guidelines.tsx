@@ -1,30 +1,31 @@
 import { createFileRoute } from "@tanstack/react-router";
 import styles from "../../index.module.css";
+import { ExposeProps } from "#/components/ExposeProps/ExposeProps";
+import DotIcon from "#/components/DotIcon/DotIcon";
 export const Route = createFileRoute("/_shell/guidelines")({
   component: () => (
     <main className={styles.prose}>
-      <h1>DotIcon — usage guidelines</h1>
+      <h1>Intro</h1>
 
       <p>
-        DotIcon is a small stateful icon: an N×N dot grid drawn as SVG, driven
-        by a fixed set of visual states. Use it anywhere you need a consistent
-        “AI / activity” indicator next to labels, buttons, tables, or chat.
+        A state-machine icon built on a dynamic 3D coordinate system, rendered
+        as SVG.
       </p>
 
       <h1>Props you actually set</h1>
+      <ExposeProps className={styles.prop}>
+        <DotIcon size={32} state={"dormant"} grid={4} />
+      </ExposeProps>
       <ul>
         <li>
           <code>state</code> — one of: dormant, thinking, loading. Pick the one
-          that matches the moment (idle, working, in progress). A dev layout
-          exists for engineering builds only; in production it behaves like
-          dormant unless explicitly enabled.
+          that matches the moment (idle, working, in progress).
         </li>
         <li>
-          <code>grid</code> — integer N for an N×N grid (default 4). Treat 3 as
-          the small tier, 4 as the default, and 5+ when you need a denser or
-          more custom mark. Note: dormant at grid 3 uses an internal 4×4 dot
-          layout for the logo pattern, so switching between dormant and other
-          states at grid 3 is a full layout change, same as changing grid size.
+          <code>grid</code> — integer N for an N×N grid. Treat <code>3</code> as
+          the small tier, <code>4</code> as the default, and <code>5+</code>{" "}
+          when you need a denser or more custom mark. Do not go above{" "}
+          <code>7</code> as the code is not optimized for higher grids.
         </li>
         <li>
           <code>size</code> — width/height in pixels (default 200 in the

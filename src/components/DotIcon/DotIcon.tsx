@@ -288,45 +288,36 @@ const DotIcon = ({
 
   // ─── Render ───────────────────────────────────────────────────────────
   return (
-    <div
-      style={{
-        display: "inline-block",
-        lineHeight: 0,
-        color: color ?? "currentColor",
-        ...style,
-      }}
+    <svg
+      viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`}
+      width={size}
+      height={size}
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ ...style, overflow: "visible", color: color ?? "currentColor" }}
     >
-      <svg
-        viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`}
-        width={size}
-        height={size}
-        xmlns="http://www.w3.org/2000/svg"
-        style={{ overflow: "visible" }}
-      >
-        {outgoing?.map((d, i) => (
-          <circle
-            key={`out-${i}`}
-            ref={(el) => {
-              outgoingRefs.current[i] = el;
-            }}
-            cx={d.cx}
-            cy={d.cy}
-            r={d.r}
-            fill="currentColor"
-            fillOpacity={d.opacity}
-          />
-        ))}
-        {Array.from({ length: dotCount }, (_, i) => (
-          <circle
-            key={i}
-            ref={(el) => {
-              circleRefs.current[i] = el;
-            }}
-            fill="currentColor"
-          />
-        ))}
-      </svg>
-    </div>
+      {outgoing?.map((d, i) => (
+        <circle
+          key={`out-${i}`}
+          ref={(el) => {
+            outgoingRefs.current[i] = el;
+          }}
+          cx={d.cx}
+          cy={d.cy}
+          r={d.r}
+          fill="currentColor"
+          fillOpacity={d.opacity}
+        />
+      ))}
+      {Array.from({ length: dotCount }, (_, i) => (
+        <circle
+          key={i}
+          ref={(el) => {
+            circleRefs.current[i] = el;
+          }}
+          fill="currentColor"
+        />
+      ))}
+    </svg>
   );
 };
 
