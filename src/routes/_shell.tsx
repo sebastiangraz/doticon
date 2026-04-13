@@ -101,7 +101,9 @@ const ShellLayout = () => {
           © STACKS {new Date().getFullYear()} &middot; All rights reserved
         </p>
       </div>
-      <Shader color={"#1E91AF"} color2={"#F7ED2C"} />
+      <div className={styles.shaderParallax} aria-hidden="true">
+        <Shader color={"#1E91AF"} color2={"#F7ED2C"} />
+      </div>
     </>
   );
 };

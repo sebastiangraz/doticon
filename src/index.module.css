@@ -563,3 +563,28 @@
     mix-blend-mode: plus-lighter;
   }
 }
+
+/* Scroll-linked parallax for the WebGL backdrop (see _shell.tsx). */
+@keyframes shaderParallaxShift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, -5vh, 0);
+  }
+}
+
+.shaderParallax {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+@supports (animation-timeline: scroll()) {
+  .shaderParallax {
+    /* Duration is ignored for scroll timelines; any non-zero value satisfies the shorthand. */
+    animation: shaderParallaxShift 1s linear both;
+    animation-timeline: scroll();
+  }
+}
