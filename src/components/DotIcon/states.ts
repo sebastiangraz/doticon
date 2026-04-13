@@ -290,7 +290,7 @@ const PROCESSING_SPIN = (() => {
 /** Radians of layoutAngle for one axis ramp 0 → π/2 (linear). */
 const PROCESSING_SPIN_PHASE = 1.0;
 /** layoutAngle spent holding between ramps. */
-const PROCESSING_PAUSE_PHASE = 0.55;
+const PROCESSING_PAUSE_PHASE = 0.3;
 const PROCESSING_STEP = Math.PI / 2;
 
 const processingAxisAngles = (

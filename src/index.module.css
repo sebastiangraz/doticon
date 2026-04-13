@@ -33,10 +33,30 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   width: 100%;
-  gap: 2rlh;
+  gap: 1rlh;
   padding-block: 3rlh;
+}
+.logoRow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--ui-border);
+  padding-bottom: 1.5rlh;
+}
+.navControl {
+  display: flex;
+  align-items: center;
+  gap: 2rlh;
+}
+
+.dotIconRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rlh;
 }
 
 .dotIconWrap {
@@ -45,7 +65,7 @@
   flex-direction: column;
   align-items: center;
   line-height: 0;
-  padding: 10px 10px 22px;
+  padding: 0.5rlh 0 0.5rlh 0;
 }
 
 .dotIconWrap:hover,
