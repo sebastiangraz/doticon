@@ -4,6 +4,7 @@ import {
   type GridConfig,
   buildGridConfig,
   gridBaseZ,
+  rotateX,
   rotateY,
   lerp,
   clamp,
@@ -76,6 +77,7 @@ const STATE_META = {
   dormant: { label: "Dormant" },
   hover: { label: "Hover" },
   thinking: { label: "Thinking" },
+  processing: { label: "Processing" },
   loading: { label: "Loading" },
   error: { label: "Error" },
   indexing: { label: "Indexing" },
@@ -101,6 +103,16 @@ export const resolveOpacities = (
   o: Opacities,
   ctx: OpacitySolveCtx,
 ): number[] => (typeof o === "function" ? o(ctx) : o);
+
+const mulberry32 = (seed: number): (() => number) => {
+  let s = seed | 0;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
 
 // ─── Layout helpers ─────────────────────────────────────────────────────────────
 
@@ -155,6 +167,167 @@ const thinkingOpacities = (
 ): number[] =>
   Array.from({ length: config.dotCount }, (_, i) => {
     const r = rotateY(sphere[i]!, layoutAngle);
+    const depth = (r.z + 1) / 1.5;
+    const u = (i / config.dotCount + 0.5) % 1;
+    const wave =
+      0.12 + 0.88 * (0.5 + 0.5 * Math.sin(2 * Math.PI * u + opacityAngle));
+    return clamp(wave * depth, 0, 1);
+  });
+
+// Processing: 8 cube vertices first, then the same interior grid count on
+// every face (uneven remainder is skipped for faces, then stacked on corners so
+// dotCount is preserved). Rotation is sequential — one axis ramps π/2, hold,
+// other axis ramps π/2, hold — in layoutAngle space (no simultaneous blend).
+const CUBE_CORNERS: readonly Vec3[] = [
+  { x: -1, y: -1, z: -1 },
+  { x: 1, y: -1, z: -1 },
+  { x: -1, y: 1, z: -1 },
+  { x: 1, y: 1, z: -1 },
+  { x: -1, y: -1, z: 1 },
+  { x: 1, y: -1, z: 1 },
+  { x: -1, y: 1, z: 1 },
+  { x: 1, y: 1, z: 1 },
+];
+
+// (u,v) in open square (-1,1)² → 3D on each face; interior-only so dots are
+// unique across faces.
+const PROCESSING_FACE_MAP: readonly ((u: number, v: number) => Vec3)[] = [
+  (u, v) => ({ x: u, y: v, z: 1 }),
+  (u, v) => ({ x: u, y: v, z: -1 }),
+  (u, v) => ({ x: 1, y: u, z: v }),
+  (u, v) => ({ x: -1, y: u, z: v }),
+  (u, v) => ({ x: u, y: 1, z: v }),
+  (u, v) => ({ x: u, y: -1, z: v }),
+];
+
+/** Evenly spaced grid strictly inside (-1,1)², row-major. */
+const interiorFaceGrid2D = (count: number): { u: number; v: number }[] => {
+  if (count <= 0) return [];
+  const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
+  const rows = Math.ceil(count / cols);
+  const out: { u: number; v: number }[] = [];
+  for (let r = 0; r < rows && out.length < count; r++) {
+    for (let c = 0; c < cols && out.length < count; c++) {
+      const u = -1 + (2 * (c + 1)) / (cols + 1);
+      const v = -1 + (2 * (r + 1)) / (rows + 1);
+      out.push({ u, v });
+    }
+  }
+  return out;
+};
+
+const buildProcessingCubeBase = (dotCount: number): Vec3[] => {
+  const out: Vec3[] = [];
+  const nCorner = Math.min(8, dotCount);
+  for (let i = 0; i < nCorner; i++) out.push(CUBE_CORNERS[i]!);
+  if (dotCount <= 8) return out;
+
+  // Only add face dots when every face can get the same count — avoids a lone
+  // dot on one face (e.g. 3×3) or 2+1+1+… splits (e.g. 4×4). Leftover slots
+  // stack on corners so length still matches dotCount.
+  const remaining = dotCount - 8;
+  const k = Math.floor(remaining / 6);
+  for (let f = 0; f < 6; f++) {
+    const map = PROCESSING_FACE_MAP[f]!;
+    for (const { u, v } of interiorFaceGrid2D(k)) {
+      out.push(map(u, v));
+    }
+  }
+
+  let j = 0;
+  while (out.length < dotCount) {
+    out.push(CUBE_CORNERS[j % 8]!);
+    j++;
+  }
+  return out;
+};
+
+const PROCESSING_SPIN = (() => {
+  const rng = mulberry32(0x50_41_54_43);
+  return {
+    signX: rng() < 0.5 ? -1 : 1,
+    signY: rng() < 0.5 ? -1 : 1,
+    firstAxisIsX: rng() < 0.5,
+  };
+})();
+
+/** Radians of layoutAngle for one axis ramp 0 → π/2 (linear). */
+const PROCESSING_SPIN_PHASE = 1.0;
+/** layoutAngle spent holding between ramps. */
+const PROCESSING_PAUSE_PHASE = 0.55;
+const PROCESSING_STEP = Math.PI / 2;
+
+const processingAxisAngles = (layoutAngle: number): { ax: number; ay: number } => {
+  const S = PROCESSING_SPIN_PHASE;
+  const P = PROCESSING_PAUSE_PHASE;
+  const T = 2 * (S + P);
+  const step = PROCESSING_STEP;
+  const sx = PROCESSING_SPIN.signX;
+  const sy = PROCESSING_SPIN.signY;
+  const xFirst = PROCESSING_SPIN.firstAxisIsX;
+
+  const cycles = Math.floor(layoutAngle / T);
+  const p = layoutAngle - cycles * T;
+
+  let dax = 0;
+  let day = 0;
+  if (xFirst) {
+    if (p < S) dax = sx * step * (p / S);
+    else if (p < S + P) dax = sx * step;
+    else if (p < 2 * S + P) {
+      dax = sx * step;
+      day = sy * step * ((p - S - P) / S);
+    } else {
+      dax = sx * step;
+      day = sy * step;
+    }
+  } else {
+    if (p < S) day = sy * step * (p / S);
+    else if (p < S + P) day = sy * step;
+    else if (p < 2 * S + P) {
+      dax = sx * step * ((p - S - P) / S);
+      day = sy * step;
+    } else {
+      dax = sx * step;
+      day = sy * step;
+    }
+  }
+
+  return {
+    ax: cycles * sx * step + dax,
+    ay: cycles * sy * step + day,
+  };
+};
+
+const rotateProcessing = (p: Vec3, layoutAngle: number): Vec3 => {
+  const { ax, ay } = processingAxisAngles(layoutAngle);
+  return rotateY(rotateX(p, ax), ay);
+};
+
+const processingLayout = (
+  config: GridConfig,
+  cube: Vec3[],
+  layoutAngle = 0,
+): Vec3[] => {
+  const baseZ = gridBaseZ(config);
+  return cube.map((pt) => {
+    const r = rotateProcessing(pt, layoutAngle);
+    return {
+      x: config.grid.center + r.x * config.grid.center * THINKING_OVERSHOOT,
+      y: config.grid.center + r.y * config.grid.center * THINKING_OVERSHOOT,
+      z: baseZ * (0.5 + 0.6 * r.z),
+    };
+  });
+};
+
+const processingOpacities = (
+  config: GridConfig,
+  cube: Vec3[],
+  layoutAngle: number,
+  opacityAngle: number,
+): number[] =>
+  Array.from({ length: config.dotCount }, (_, i) => {
+    const r = rotateProcessing(cube[i]!, layoutAngle);
     const depth = (r.z + 1) / 1.5;
     const u = (i / config.dotCount + 0.5) % 1;
     const wave =
@@ -329,16 +502,6 @@ const INDEXING_FOCUS = 6; //6
 const INDEXING_SEED = 30; //5, 9, 30
 const INDEXING_SPEED = 8;
 const INDEXING_LATCH_TICKS = 5;
-
-const mulberry32 = (seed: number): (() => number) => {
-  let s = seed | 0;
-  return () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-};
 
 type IndexingSeq = { dotRanks: number[][]; latchRank: number[] };
 
@@ -546,6 +709,7 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const hoverBaseZ = flatGrid(dormantProj, dormantZ).map((p) => p.z);
   const hoverRanks = buildHoverRanks(dormantProj.n);
   const sphere = buildSphereBase(config);
+  const processingCube = buildProcessingCubeBase(config.dotCount);
   const ranks = buildLoadingRanks(config);
   const errorData = buildErrorData(config);
   const indexingSeq = buildIndexingSequence(config);
@@ -579,6 +743,21 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       layout: (a = 0) => thinkingLayout(config, sphere, a),
       opacities: (ctx) =>
         thinkingOpacities(config, sphere, ctx.layoutAngle, ctx.opacityAngle),
+      animated: true,
+      layoutSpeed: 2.5,
+      opacitySpeed: 4,
+      projConfig: config,
+    },
+    processing: {
+      label: STATE_META.processing.label,
+      layout: (a = 0) => processingLayout(config, processingCube, a),
+      opacities: (ctx) =>
+        processingOpacities(
+          config,
+          processingCube,
+          ctx.layoutAngle,
+          ctx.opacityAngle,
+        ),
       animated: true,
       layoutSpeed: 2.5,
       opacitySpeed: 4,

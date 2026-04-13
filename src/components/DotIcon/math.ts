@@ -50,3 +50,9 @@ export const rotateY = ({ x, y, z }: Vec3, a: number): Vec3 => {
   const s = Math.sin(a);
   return { x: x * c + z * s, y, z: -x * s + z * c };
 };
+
+export const rotateX = ({ x, y, z }: Vec3, a: number): Vec3 => {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return { x, y: y * c - z * s, z: y * s + z * c };
+};
