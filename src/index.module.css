@@ -35,10 +35,11 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  gap: 1rlh;
-  padding-block: 3rlh;
+  column-gap: 1rlh;
+  row-gap: 2rlh;
+  padding-bottom: 3rlh;
 }
-.logoRow {
+.navigation {
   width: 100%;
   display: flex;
   align-items: center;
@@ -46,7 +47,7 @@
   border-bottom: 1px solid var(--ui-border);
   padding-bottom: 1.5rlh;
 }
-.navControl {
+.controls {
   display: flex;
   align-items: center;
   gap: 2rlh;
@@ -65,7 +66,7 @@
   flex-direction: column;
   align-items: center;
   line-height: 0;
-  padding: 0.5rlh 0 1.25rlh 0;
+  padding: 0 0 1.25rlh 0;
 }
 
 .previewWrap:hover,
