@@ -49,3 +49,31 @@ body {
   padding: 0;
   color: inherit;
 }
+
+/* SPA route changes (TanStack Router + document.startViewTransition) */
+@keyframes view-transition-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes view-transition-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+::view-transition-old(root) {
+  animation: 220ms ease both view-transition-fade-out;
+}
+
+::view-transition-new(root) {
+  animation: 220ms ease both view-transition-fade-in;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 1ms;
+  }
+}
