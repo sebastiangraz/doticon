@@ -52,14 +52,14 @@
   gap: 2rlh;
 }
 
-.dotIconRow {
+.previewRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 2rlh;
 }
 
-.dotIconWrap {
+.previewWrap {
   position: relative;
   display: inline-flex;
   flex-direction: column;
@@ -68,12 +68,12 @@
   padding: 0.5rlh 0 1.25rlh 0;
 }
 
-.dotIconWrap:hover,
-.dotIconWrap:focus-within {
+.previewWrap:hover,
+.previewWrap:focus-within {
   outline-color: var(--ui-border);
 }
 
-.dotIconCopyButton {
+.copySvgButton {
   position: absolute;
   appearance: none;
   background: transparent;
@@ -97,14 +97,14 @@
     color 0.12s ease;
 }
 
-.dotIconWrap:hover .dotIconCopyButton,
-.dotIconWrap:focus-within .dotIconCopyButton {
+.previewWrap:hover .copySvgButton,
+.previewWrap:focus-within .copySvgButton {
   opacity: 1;
   transform: translateX(-50%) translateY(4px);
   pointer-events: auto;
 }
 
-.dotIconCopyButton:hover {
+.copySvgButton:hover {
   color: var(--ui-secondary);
 }
 

@@ -15,7 +15,7 @@ export const Route = createFileRoute("/")({
     const [icon3dState, setIcon3dState] = useState<StateKey>("dormant");
     const [gridSize, setGridSize] = useState(4);
     const [gridSizeInput, setGridSizeInput] = useState(gridSize);
-    const dotIconWrapRef = useRef<HTMLDivElement | null>(null);
+    const previewRef = useRef<HTMLDivElement | null>(null);
     const [didCopy, setDidCopy] = useState(false);
 
     useEffect(() => {
@@ -34,7 +34,7 @@ export const Route = createFileRoute("/")({
     );
 
     const copySvg = async () => {
-      const svg = dotIconWrapRef.current?.querySelector("svg");
+      const svg = previewRef.current?.querySelector("svg");
       if (!svg) return;
 
       const svgText = new XMLSerializer().serializeToString(svg);
@@ -80,13 +80,10 @@ export const Route = createFileRoute("/")({
                 />
               </svg>
               <div className={styles.navControl}>
-                <label
-                  htmlFor="doticon-grid-size"
-                  className={styles.gridControl}
-                >
+                <label htmlFor="grid-size" className={styles.gridControl}>
                   Grid
                   <input
-                    id="doticon-grid-size"
+                    id="grid-size"
                     type="range"
                     min={0}
                     max={GRID_SIZE_OPTIONS.length - 1}
@@ -151,13 +148,13 @@ export const Route = createFileRoute("/")({
                 </div>
               </div>
             </div>
-            <div className={styles.dotIconRow}>
-              <div className={styles.dotIconWrap} ref={dotIconWrapRef}>
+            <div className={styles.previewRow}>
+              <div className={styles.previewWrap} ref={previewRef}>
                 <DotIcon size={100} state={icon3dState} grid={gridSize} />
 
                 <button
                   type="button"
-                  className={styles["dotIconCopyButton"]}
+                  className={styles["copySvgButton"]}
                   onClick={copySvg}
                 >
                   {didCopy ? "COPIED" : "COPY"}
