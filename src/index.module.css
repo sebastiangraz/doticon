@@ -74,6 +74,9 @@
     margin-bottom: 0.76rlh;
     padding: 0;
     color: var(--ui-secondary);
+    .prop {
+      color: var(--ui-foreground);
+    }
   }
   code {
     font-size: inherit;
