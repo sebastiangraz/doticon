@@ -28,6 +28,47 @@
   }
 }
 
+.prose {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 16px;
+  font-size: 0.75rlh;
+
+  color: var(--ui-secondary);
+  * + * {
+    margin-top: 1rlh;
+  }
+  h1 {
+    font-size: 1rlh;
+    margin-bottom: 1rlh;
+    margin-top: 2rlh;
+    letter-spacing: 0.05em;
+    padding: 0;
+    text-transform: uppercase;
+  }
+  p {
+    margin: 0;
+    padding: 0;
+  }
+  ul {
+    list-style: disc;
+    margin: 0;
+    padding: 0;
+  }
+  li {
+    margin-top: 0.25rlh;
+    padding: 0;
+  }
+  code {
+    font-size: inherit;
+    font-family: inherit;
+    color: var(--ui-foreground);
+    background: var(--ui-border);
+    padding: 0.125rlh 0.25rlh;
+    border-radius: 0.25rlh;
+  }
+}
+
 .controlsRow {
   /* max-width: 720px; */
   display: flex;
