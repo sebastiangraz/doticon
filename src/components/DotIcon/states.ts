@@ -324,11 +324,11 @@ const hoverOpacities = (
 
 const INDEXING_TICKS = 32; //32
 const INDEXING_TRAIL = 4; //6
-const INDEXING_PAUSE = 1; //8
+const INDEXING_PAUSE = 2; //8
 const INDEXING_FOCUS = 6; //6
-const INDEXING_SEED = 5; //5, 9, 30
-const INDEXING_SPEED = 7;
-const INDEXING_LATCH_TICKS = 4;
+const INDEXING_SEED = 30; //5, 9, 30
+const INDEXING_SPEED = 8;
+const INDEXING_LATCH_TICKS = 5;
 
 const mulberry32 = (seed: number): (() => number) => {
   let s = seed | 0;
