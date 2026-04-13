@@ -351,8 +351,8 @@ const processingLayout = (
   return cube.map((pt) => {
     const r = rotateProcessing(pt, layoutAngle);
     return {
-      x: config.grid.center + r.x * config.grid.center,
-      y: config.grid.center + r.y * config.grid.center,
+      x: config.grid.center + r.x * config.grid.center * 0.85,
+      y: config.grid.center + r.y * config.grid.center * 0.85,
       z: baseZ * (0.5 + 0.6 * r.z),
     };
   });
