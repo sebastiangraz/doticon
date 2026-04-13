@@ -37,6 +37,9 @@
   flex-direction: column;
   gap: 0.75rlh;
   .prop {
+    display: flex;
+    margin-top: 1rlh;
+    margin-bottom: 2rlh;
     & > * {
       display: flex;
       flex-direction: row;
@@ -56,6 +59,10 @@
     margin: 0;
     padding: 0;
     color: var(--ui-secondary);
+  }
+  strong {
+    color: var(--ui-foreground);
+    font-weight: normal;
   }
   ul {
     list-style: disc;
