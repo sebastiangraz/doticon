@@ -1,4 +1,4 @@
-import { isDevDotIconStateEnabled } from "#/env";
+import { isDevStateEnabled } from "#/env";
 import {
   type Vec3,
   type GridConfig,
@@ -929,9 +929,7 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
 const ALL_STATE_KEYS = Object.keys(STATE_META) as StateKey[];
 
 export const STATE_KEYS = (
-  isDevDotIconStateEnabled
-    ? ALL_STATE_KEYS
-    : ALL_STATE_KEYS.filter((k) => k !== "dev")
+  isDevStateEnabled ? ALL_STATE_KEYS : ALL_STATE_KEYS.filter((k) => k !== "dev")
 ) as StateKey[];
 
 export const getStateLabel = (key: StateKey): string => STATE_META[key].label;

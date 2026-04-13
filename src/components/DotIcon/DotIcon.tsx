@@ -1,7 +1,7 @@
 import { useRef, useEffect, useMemo, useState, useLayoutEffect } from "react";
 import type { CSSProperties } from "react";
 import { animate, useTime, useMotionValueEvent } from "motion/react";
-import { isDevDotIconStateEnabled } from "#/env";
+import { isDevStateEnabled } from "#/env";
 import {
   lerp,
   clamp,
@@ -47,7 +47,7 @@ const DotIcon = ({
   const prevMsRef = useRef(0);
 
   const effectiveState: StateKey =
-    state === "dev" && !isDevDotIconStateEnabled ? "dormant" : state;
+    state === "dev" && !isDevStateEnabled ? "dormant" : state;
   const stateRef = useRef(effectiveState);
   stateRef.current = effectiveState;
 

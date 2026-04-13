@@ -24,7 +24,7 @@ Paint order: no depth-based paint ordering (no Z-sort). SVG circles render in st
 
 `OpacitySolveCtx = { layoutAngle, opacityAngle }` — two independent phase angles passed to functional opacities. `resolveOpacities()` normalises both static arrays and functions.
 
-Four states exist (`StateKey = "dormant" | "thinking" | "loading" | "dev"`); more can be added by registering one entry in `buildStates` plus layout/opacity definitions. The `dev` state is only visible when `isDevDotIconStateEnabled` is true (localhost / `VITE_ENABLE_DEV_DOTICON_STATE=true`); when disabled, `state="dev"` falls back to `"dormant"`.
+Four states exist (`StateKey = "dormant" | "thinking" | "loading" | "dev"`); more can be added by registering one entry in `buildStates` plus layout/opacity definitions. The `dev` state is only visible when `isDevStateEnabled` is true (localhost / `VITE_ENABLE_DEV_STATE=true`); when disabled, `state="dev"` falls back to `"dormant"`.
 
 **Dev** — flat grid, all dots at `gridBaseZ`, all opacities 1. Not animated. Uses the base `config` as projConfig.
 
