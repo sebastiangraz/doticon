@@ -92,7 +92,7 @@ const GuidelinesPage = () => {
       <p>
         The playground can copy the current SVG to the clipboard — useful for
         mocks, specs, or one-off assets. For product UI, prefer the React
-        component so state and grid stay in sync with your app.
+        component as it includes all motion logic.
       </p>
 
       <h1>Code Hygiene</h1>
