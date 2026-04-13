@@ -72,6 +72,91 @@ const buildDormantOpacities = (n: number): number[] => {
   });
 };
 
+// ─── Success patterns ───────────────────────────────────────────────────────────
+// Same tier model as dormant: 7×7 masters drive NN downsampling (e.g. 5×5, 6×6);
+// grid=3 uses an internal 4×4 projection, so 3×3-tier arrays hold 16 values.
+
+const SUCCESS_MASTER_N = 7;
+
+/** Nearest-neighbour resample from a 7×7 master onto an n×n grid (edges align). */
+const sample7x7Master = <T>(n: number, master: readonly T[]): T[] => {
+  if (n === SUCCESS_MASTER_N) return [...master];
+  const span = SUCCESS_MASTER_N - 1;
+  return Array.from({ length: n * n }, (_, idx) => {
+    const col = idx % n;
+    const row = Math.floor(idx / n);
+    const srcCol = n === 1 ? 0 : Math.round((col / (n - 1)) * span);
+    const srcRow = n === 1 ? 0 : Math.round((row / (n - 1)) * span);
+    return master[srcRow * SUCCESS_MASTER_N + srcCol]!;
+  });
+};
+
+// prettier-ignore
+const SUCCESS_7x7_OPACITIES: readonly number[] = [
+  0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12,
+  0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 1.00,
+  0.12, 0.12, 0.12, 0.12, 0.12, 1.00, 0.12,
+  1.00, 0.12, 0.12, 0.12, 1.00, 0.12, 0.12,
+  0.12, 1.00, 0.12, 1.00, 0.12, 0.12, 0.12,
+  0.12, 0.12, 1.00, 0.12, 0.12, 0.12, 0.12,
+  0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12,
+];
+// prettier-ignore
+const SUCCESS_7x7_Z: readonly number[] = [
+  0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 1, 0,
+  0, 0, 0, 0, 1, 0, 0,
+  0, 1, 0, 1, 0, 0, 0,
+  0, 0, 1, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0,
+];
+
+// Grid=3 renders internally as 4×4 — arrays hold 16 values.
+// prettier-ignore
+const SUCCESS_3x3_OPACITIES: readonly number[] = [
+  0.00, 0.00, 0.00, 1.00,
+  1.00, 0.00, 1.00, 0.00,
+  0.00, 1.00, 0.00, 0.00,
+  0.00, 0.00, 0.00, 0.00,
+];
+// prettier-ignore
+const SUCCESS_3x3_Z: readonly number[] = [
+  0, 0, 0, 4,
+  4, 0, 4, 0,
+  0, 4, 0, 0,
+  0, 0, 0, 0,
+];
+
+// prettier-ignore
+const SUCCESS_4x4_OPACITIES: readonly number[] = [
+  0.12, 0.12, 0.12, 1.00,
+  1.00, 0.12, 1.00, 0.12,
+  0.12, 1.00, 0.12, 0.12,
+  0.12, 0.12, 0.12, 0.12,
+];
+// prettier-ignore
+const SUCCESS_4x4_Z: readonly number[] = [
+  2, 2, 2, 3,
+  4, 2, 4, 2,
+  2, 4, 2, 2,
+  2, 2, 2, 2,
+];
+
+const buildSuccessOpacities = (n: number): number[] => {
+  if (n === 3) return [...SUCCESS_3x3_OPACITIES];
+  if (n === 4) return [...SUCCESS_4x4_OPACITIES];
+  if (n === SUCCESS_MASTER_N) return [...SUCCESS_7x7_OPACITIES];
+  return sample7x7Master(n, SUCCESS_7x7_OPACITIES);
+};
+
+const buildSuccessZ = (n: number): readonly number[] => {
+  if (n === 3) return SUCCESS_3x3_Z;
+  if (n === 4) return SUCCESS_4x4_Z;
+  if (n === SUCCESS_MASTER_N) return SUCCESS_7x7_Z;
+  return sample7x7Master(n, SUCCESS_7x7_Z);
+};
+
 // ─── State types ────────────────────────────────────────────────────────────────
 
 const STATE_META = {
@@ -80,6 +165,7 @@ const STATE_META = {
   thinking: { label: "Thinking" },
   processing: { label: "Processing" },
   loading: { label: "Loading" },
+  success: { label: "Success" },
   error: { label: "Error" },
   indexing: { label: "Indexing" },
   dev: { label: "Dev" },
@@ -744,6 +830,9 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const dormantZ =
     config.n === 3 ? DORMANT_3x3_Z : config.n === 4 ? DORMANT_4x4_Z : null;
   const dormantOpa = buildDormantOpacities(config.n);
+  const successProj = config.n === 3 ? buildGridConfig(4) : config;
+  const successZ = buildSuccessZ(config.n);
+  const successOpa = buildSuccessOpacities(config.n);
   const hoverBaseZ = flatGrid(dormantProj, dormantZ).map((p) => p.z);
   const hoverRanks = buildHoverRanks(dormantProj.n);
   const sphere = buildSphereBase(config);
@@ -808,6 +897,13 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       animated: true,
       layoutSpeed: 16,
       projConfig: config,
+    },
+    success: {
+      label: STATE_META.success.label,
+      layout: () => flatGrid(successProj, successZ),
+      opacities: successOpa,
+      animated: false,
+      projConfig: successProj,
     },
 
     error: {
