@@ -50,7 +50,8 @@
 .controls {
   display: flex;
   align-items: center;
-  gap: 2rlh;
+  column-gap: 0.5rlh;
+  row-gap: 1rlh;
 }
 
 .previewRow {
@@ -284,6 +285,20 @@
 
 .themeToggleInput:checked + .themeToggleButton .themeToggleIconSun {
   display: block;
+}
+
+.UIToggle {
+  composes: themeToggle;
+}
+
+.UIToggleInput {
+  composes: themeToggleInput;
+}
+
+.UIToggleButton {
+  composes: themeToggleButton;
+  width: auto;
+  padding: 2px 8px;
 }
 
 .row {

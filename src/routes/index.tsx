@@ -123,6 +123,19 @@ export const Route = createFileRoute("/")({
                   </svg>
                 </label>
               </div>
+              <button type="button" className={styles.UIToggle}>
+                <input
+                  className={styles.UIToggleInput}
+                  id="guidelines-toggle"
+                  type="checkbox"
+                />
+                <label
+                  className={styles.UIToggleButton}
+                  htmlFor="guidelines-toggle"
+                >
+                  Guidelines
+                </label>
+              </button>
             </div>
           </div>
           <div className={styles.controlsRow}>
