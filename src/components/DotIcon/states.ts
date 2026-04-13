@@ -160,15 +160,47 @@ const buildSuccessZ = (n: number): readonly number[] => {
 // ─── State types ────────────────────────────────────────────────────────────────
 
 const STATE_META = {
-  dormant: { label: "Dormant" },
-  hover: { label: "Hover" },
-  thinking: { label: "Thinking" },
-  processing: { label: "Processing" },
-  loading: { label: "Loading" },
-  success: { label: "Success" },
-  error: { label: "Error" },
-  indexing: { label: "Indexing" },
-  dev: { label: "Dev" },
+  dormant: {
+    label: "Dormant",
+    usage: "Static logotype-style mark, use for idle, or “ready” surfaces.",
+  },
+  hover: {
+    label: "Hover",
+    usage:
+      "Animated accent on the dormant layout, use for interactive hover feedback.",
+  },
+  thinking: {
+    label: "Thinking",
+    usage:
+      "Sphere motion, use for open-ended work or “assistant is considering.”",
+  },
+  processing: {
+    label: "Processing",
+    usage:
+      "Rotating cube-style motion, use for sustained work or “running in the background.”",
+  },
+  loading: {
+    label: "Loading",
+    usage: "Column fill sweep, use for determinate or indeterminate progress.",
+  },
+  success: {
+    label: "Success",
+    usage: "Static success pattern, use when an action completed successfully.",
+  },
+  error: {
+    label: "Error",
+    usage:
+      "Animated error read, use for failures, blocked actions, or validation errors.",
+  },
+  indexing: {
+    label: "Indexing",
+    usage:
+      "Randomized scanning sequence, use while indexing, searching, or ingesting files.",
+  },
+  dev: {
+    label: "Dev",
+    usage: "Flat diagnostic grid for layout checks.",
+  },
 } as const;
 
 export type StateKey = keyof typeof STATE_META;
@@ -933,3 +965,5 @@ export const STATE_KEYS = (
 ) as StateKey[];
 
 export const getStateLabel = (key: StateKey): string => STATE_META[key].label;
+
+export const getStateUsage = (key: StateKey): string => STATE_META[key].usage;

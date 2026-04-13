@@ -34,6 +34,7 @@
   padding: 0 16px;
   font-size: 0.75rlh;
   display: flex;
+  line-height: 1.6;
   flex-direction: column;
   gap: 0.75rlh;
   .prop {
@@ -79,7 +80,7 @@
     font-family: inherit;
     color: var(--ui-foreground);
     background: var(--ui-border);
-    padding: 0.075rlh 0.25rlh;
+    padding: 0.05rlh 0.25rlh;
     border-radius: 0.25rlh;
   }
 }

@@ -19,9 +19,10 @@ import {
   resolveOpacities,
   STATE_KEYS,
   getStateLabel,
+  getStateUsage,
 } from "./states";
 
-export { type StateKey, STATE_KEYS, getStateLabel };
+export { type StateKey, STATE_KEYS, getStateLabel, getStateUsage };
 
 const OPACITY_STAGGER_MS = 10;
 const OPACITY_CROSSFADE_MS = 120;
@@ -30,7 +31,7 @@ const OUTGOING_FADE_S = 0.2;
 type OutgoingDot = { cx: string; cy: string; r: string; opacity: string };
 
 const DotIcon = ({
-  size = 200,
+  size = 24,
   state = "dormant",
   color,
   style,

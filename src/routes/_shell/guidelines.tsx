@@ -1,22 +1,40 @@
 import { createFileRoute } from "@tanstack/react-router";
 import styles from "../../index.module.css";
 import { ExposeProps } from "#/components/ExposeProps/ExposeProps";
-import DotIcon from "#/components/DotIcon/DotIcon";
-export const Route = createFileRoute("/_shell/guidelines")({
-  component: () => (
+import DotIcon, {
+  STATE_KEYS,
+  getStateUsage,
+} from "#/components/DotIcon/DotIcon";
+
+const StateKeyList = () => {
+  const filteredStates = STATE_KEYS.filter((key) => key !== "dev");
+  return (
+    <>
+      {filteredStates.map((key, i) => (
+        <span key={key}>
+          {i === 0 ? "" : i === filteredStates.length - 1 ? ", or " : ", "}
+          <strong>{key}</strong>
+        </span>
+      ))}
+    </>
+  );
+};
+
+const GuidelinesPage = () => {
+  return (
     <main className={styles.prose}>
       <h1>Guidelines</h1>
 
       <p>
         The Stacks AI icon is a state-machine icon built on a dynamic 3D
-        coordinate system, rendered as SVG.
+        coordinate system, rendered as SVG. Works as a single state, but
+        supports motion transitions between any two states.
       </p>
 
       <h1>Properties</h1>
       <ul>
         <li>
-          <code>state</code> one of <code>dormant</code>, <code>thinking</code>,{" "}
-          <code>loading</code>.
+          <code>state</code> can be set to <StateKeyList />.
           <ExposeProps className={styles.prop} ignoreProps={["grid", "size"]}>
             <DotIcon size={24} state={"dormant"} grid={4} />
             <DotIcon size={24} state={"thinking"} grid={4} />
@@ -35,62 +53,79 @@ export const Route = createFileRoute("/_shell/guidelines")({
           </ExposeProps>
         </li>
         <li>
-          <code>size</code> width/height in pixels (default 200 in the component
-          API; the playground uses other sizes in examples).
+          <code>size</code> width/height in pixels, defaults to{" "}
+          <strong>24px</strong>.
           <ExposeProps className={styles.prop} ignoreProps={["state", "grid"]}>
-            <DotIcon size={12} state={"thinking"} grid={3} />
-            <DotIcon size={24} state={"thinking"} grid={4} />
+            <DotIcon size={16} state={"loading"} grid={4} />
+            <DotIcon state={"loading"} grid={4} />
           </ExposeProps>
         </li>
         <li>
-          <code>color</code> <strong>(optional)</strong>. Defaults to
-          currentColor & inherits the color of the parent. Use for explicit
-          color control.
+          <code>color</code> Defaults to currentColor which inherits the color
+          of the parent. Set for explicit color control.
           <ExposeProps
             className={styles.prop}
             ignoreProps={["state", "grid", "size"]}
           >
             <DotIcon
               size={24}
-              state={"loading"}
+              state={"thinking"}
               grid={4}
               color="light-dark(#011D28, #9EEBFF)"
             />
-            <DotIcon size={24} state={"loading"} grid={4} color="#1E91AF" />
-            <DotIcon size={24} state={"loading"} grid={4} />
+            <DotIcon size={24} state={"thinking"} grid={4} color="#1E91AF" />
+            <DotIcon size={24} state={"thinking"} grid={4} />
           </ExposeProps>
         </li>
       </ul>
 
-      <h1>When to use which state</h1>
+      <h1>States</h1>
       <ul>
-        <li>
-          <code>dormant</code> — static logotype-style mark; use for idle,
-          success, or “ready” surfaces.
-        </li>
-        <li>
-          <code>thinking</code> — slow sphere motion; use for open-ended work or
-          “assistant is considering.”
-        </li>
-        <li>
-          <code>loading</code> — column fill sweep; use for determinate or
-          indeterminate progress where a crisp “working” read is enough.
-        </li>
+        {STATE_KEYS.map((key) => (
+          <li key={key}>
+            <code>{key}</code> {getStateUsage(key)}
+          </li>
+        ))}
       </ul>
 
-      <h1>Embedding and assets</h1>
+      <h1>Embedding & Assets</h1>
       <p>
         The playground can copy the current SVG to the clipboard — useful for
         mocks, specs, or one-off assets. For product UI, prefer the React
         component so state and grid stay in sync with your app.
       </p>
 
-      <h1>Exports</h1>
+      <h1>Code Hygiene</h1>
+      <ul>
+        <li>
+          Avoid changing icon state by replacing it with a new component
+          instance. This will reset the animation phase and cause a jarring
+          transition. For smooth transitions modify the <code>state</code> prop
+          directly.
+        </li>
+        <li>
+          Do not render more than <strong>10</strong> animated instances on the
+          same page indefinitely. This is resource intensive and will cause
+          performance issues. Once an animation is complete, it should revert to
+          a static state such as <code>dormant</code>.
+        </li>
+        <li>
+          Do not use high resolution grids (e.g. <strong>7</strong>) for product
+          UI. It's illegible and resource intensive. Larger grid should only be
+          used for introductory content or branding purposes.
+        </li>
+      </ul>
+
+      <h1>Types & Helpers</h1>
       <p>
-        Use the exported types and helpers — StateKey, STATE_KEYS, getStateLabel
-        — when building menus, tests, or documentation that list states in one
-        place.
+        Use the exported types and helpers — StateKey, STATE_KEYS,
+        getStateLabel, getStateUsage — when building menus, tests, or
+        documentation that list states in one place.
       </p>
     </main>
-  ),
+  );
+};
+
+export const Route = createFileRoute("/_shell/guidelines")({
+  component: GuidelinesPage,
 });
