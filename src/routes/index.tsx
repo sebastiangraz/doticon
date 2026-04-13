@@ -33,7 +33,7 @@ export const Route = createFileRoute("/")({
       ),
     );
 
-    const copyCurrentDotIconSvg = async () => {
+    const copySvg = async () => {
       const svg = dotIconWrapRef.current?.querySelector("svg");
       if (!svg) return;
 
@@ -158,7 +158,7 @@ export const Route = createFileRoute("/")({
                 <button
                   type="button"
                   className={styles["dotIconCopyButton"]}
-                  onClick={copyCurrentDotIconSvg}
+                  onClick={copySvg}
                 >
                   {didCopy ? "COPIED" : "COPY"}
                 </button>
