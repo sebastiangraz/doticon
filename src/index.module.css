@@ -10,7 +10,7 @@
 .container {
   width: 92%;
   max-width: 1152px;
-  padding: 0 16px;
+  padding: 0 0.5rlh;
   margin: 6rlh auto;
   display: flex;
   flex-direction: column;
@@ -31,7 +31,7 @@
 .prose {
   max-width: 60ch;
   margin: 0 auto;
-  padding: 0 16px;
+  padding: 0 0.5rlh;
   font-size: 0.75rlh;
   display: flex;
   line-height: 1.6;
@@ -152,7 +152,7 @@
   pointer-events: none;
   border: none;
   padding: 8px 10px;
-  font-size: 0.55rlh;
+  font-size: 0.65rlh;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   cursor: pointer;
@@ -185,8 +185,8 @@
 }
 
 .stateButton {
-  padding: 12px 17px;
-  font-size: 11px;
+  padding: 0.65rem 0.85rlh;
+  font-size: 0.65rlh;
   font-family: inherit;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -243,7 +243,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 11px;
+  font-size: 0.75rlh;
   font-family: inherit;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -314,7 +314,7 @@
     "Sohne Mono", "SF Mono", "Fira Code", "JetBrains Mono", monospace;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  font-size: 11px;
+  font-size: 0.75rlh;
   display: inline-grid;
   place-items: center;
   width: auto;
@@ -404,7 +404,7 @@
   border: 1px solid var(--ui-border);
   span {
     color: var(--ui-tertiary);
-    font-size: 0.6rlh;
+    font-size: 0.7rlh;
   }
 
   :global(.propValue span) {
@@ -450,9 +450,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
+  min-height: 180px;
   border-right: 1px solid var(--ui-border);
-
+  overflow: clip;
   &:last-child {
     border-right: none;
   }
@@ -464,8 +464,8 @@
   display: inline-flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 8px 16px 8px 12px;
-  font-size: 12px;
+  padding: 0.5rlh 0.85rlh;
+  font-size: 0.75rlh;
   font-family: inherit;
   text-transform: uppercase;
   text-box-edge: cap alphabetic;
@@ -490,11 +490,11 @@
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 0.65rlh;
 
   th,
   td {
-    height: 1.5rlh;
+    height: 1.65rlh;
     padding: 0 0.5rlh;
     text-align: left;
     border-bottom: 1px solid var(--ui-border);
@@ -510,7 +510,7 @@
     font-weight: 500;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    font-size: 9.5px;
+    font-size: 0.55rlh;
   }
 
   tbody tr:last-child td {
@@ -545,7 +545,7 @@
   flex-direction: row;
   gap: 0.5rlh;
   padding: 8px 11px;
-  font-size: 11px;
+  font-size: 0.7rlh;
   & > *:not(svg) {
     color: var(--ui-secondary);
   }

@@ -16,7 +16,9 @@
 }
 
 :root {
+  --scalefactor: clamp(0.75rem, 0.6384rem + 0.4464vw, 1rem);
   color-scheme: light;
+  line-height: var(--scalefactor);
 }
 
 /* Pure CSS theme switcher: checkbox in the DOM controls color-scheme. */
