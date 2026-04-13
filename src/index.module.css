@@ -28,6 +28,11 @@
   }
 }
 
+.guidelinesPage {
+  width: 100%;
+  min-height: 40vh;
+}
+
 .controlsRow {
   /* max-width: 720px; */
   display: flex;
@@ -258,6 +263,7 @@
   cursor: pointer;
   user-select: none;
   color: var(--ui-secondary);
+  text-decoration: none;
   transition:
     background-color 0.15s ease,
     color 0.15s ease,
@@ -265,6 +271,11 @@
 }
 
 .toggleButton:hover {
+  background: var(--ui-border);
+  color: var(--ui-foreground);
+}
+
+.toggle[data-active="true"] .toggleButton {
   background: var(--ui-border);
   color: var(--ui-foreground);
 }
