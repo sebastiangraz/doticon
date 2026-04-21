@@ -94,7 +94,7 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  column-gap: 1rlh;
+  column-gap: 2rlh;
   row-gap: 2rlh;
   padding-bottom: 3rlh;
 }
@@ -188,11 +188,14 @@
   overflow: hidden;
   outline: 1px var(--ui-border) solid;
   outline-offset: -1px;
+  flex: 1 1 0%;
+  min-width: 240px;
 }
 
 .stateButton {
-  flex: 1 1 0;
-  min-width: calc(100% / 6);
+  flex: 1 1 0%;
+  min-width: unset;
+  /* max-width: clamp(100px, 100%, 300px); */
   padding: 0.65rem 0.85rlh;
   font-size: 0.65rlh;
   font-family: inherit;
@@ -214,6 +217,9 @@
   user-select: none;
   &:hover {
     background: var(--ui-border);
+  }
+  @media (min-width: 768px) {
+    min-width: calc(100% / 5);
   }
 }
 
