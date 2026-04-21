@@ -793,26 +793,21 @@ const indexingOpacities = (
 // One-shot ripple from centre outward on the dormant layout.
 //
 // Model (mirrors loadingLayout in spirit): the dormant layout is the rest
-// state. Wavefronts sweep outward in ring-distance space; as each wave
-// front crosses a dot, that dot's target dips briefly toward a shrunken Z
-// / dimmed opacity, then returns. Rest state = dormant naturally, so after
-// the last wave has passed all targets collapse back to baseline. The
-// spring layer supplies all smoothing — there are no discrete phases.
-//
-// Four wavefronts are emitted in total: two concentric rings (large
-// leading, small trailing), fired twice with a short quiet gap between.
+// state. A single wave front sweeps outward in ring-distance space; as
+// it crosses a dot, that dot's target dips briefly toward a shrunken Z
+// / dimmed opacity, then returns. The wave is fired twice with a short
+// quiet gap between passes. Rest state = dormant naturally, so after the
+// final pass all targets collapse back to baseline. The spring layer
+// supplies all smoothing — there are no discrete phases.
 //
 // Ring distances are normalised to [0, 1] (0 = centre, 1 = corner) so the
 // timing constants are independent of grid size.
 
-const PING_SPEED = 2; // angle units / second
-const PING_DIP = 1; // Z units the dip pulls each dot down
-const PING_TAIL = 1; // half-width (in ring-dist units) of each ring pulse
-const PING_GAP = 0.2; // small ring trails the large ring by this much
-const PING_PASS_SPAN = 1.0 + PING_GAP + PING_TAIL; // wavefront sweeps until clear
-const PING_BETWEEN = 0.5; // quiet gap between the two passes
-const PING_PASS2_OFFSET = PING_PASS_SPAN + PING_BETWEEN;
-const PING_TOTAL_ANGLE = PING_PASS2_OFFSET + PING_PASS_SPAN;
+const PING_SPEED = 3; // angle units / second
+const PING_DIP = 2; // Z units the dip pulls each dot down
+const PING_TAIL = 1.5; // width (in ring-dist units) of the ring pulse
+const PING_PASS_OFFSET = 0.1 + PING_TAIL + 1; // wave clears + quiet gap
+const PING_TOTAL_ANGLE = PING_PASS_OFFSET + 1 + PING_TAIL;
 /** Seconds until the animation is completely done and can be frozen. */
 const PING_SEQ_DURATION = (PING_TOTAL_ANGLE + 0.3) / PING_SPEED;
 
@@ -834,18 +829,13 @@ const pingTent = (d: number, tail: number): number => {
 };
 
 // Dip intensity [0..1] at the given angle for a dot at normalised ring
-// distance `rd`. Peaks as each ring's wave front crosses the dot; large
-// ring pulses at full strength, small ring trails at 0.6×.
+// distance `rd`. Peaks as the ring wave front crosses the dot; the same
+// wave is fired twice, offset in time.
 const pingIntensity = (angle: number, rd: number): number => {
   const a = angle - rd;
-  const b = a - PING_GAP;
-  const c = a - PING_PASS2_OFFSET;
-  const d = c - PING_GAP;
   return Math.max(
     pingTent(a, PING_TAIL),
-    0.6 * pingTent(b, PING_TAIL),
-    pingTent(c, PING_TAIL),
-    0.6 * pingTent(d, PING_TAIL),
+    pingTent(a - PING_PASS_OFFSET, PING_TAIL),
   );
 };
 
