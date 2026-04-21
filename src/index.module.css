@@ -10,7 +10,6 @@
 .container {
   width: 92%;
   max-width: 1152px;
-  padding: 0 0.5rlh;
   margin: 6rlh auto;
   display: flex;
   flex-direction: column;
@@ -181,54 +180,45 @@
 
 .stateButtons {
   display: flex;
-  border: 1px solid var(--ui-border);
-  gap: 0;
+  flex-wrap: wrap;
   overflow: clip;
-  border-radius: 99em;
+  /* filter: drop-shadow(0 0 1px red); */
+  background: transparent;
+  border-radius: 0.25rlh;
+  overflow: hidden;
+  outline: 1px var(--ui-border) solid;
+  /* clip-path: xywh(0 0 100% 100% round 0.25rlh); */
+  outline-offset: -1px;
 }
 
 .stateButton {
+  flex: 1 1 0;
+  min-width: calc(100% / 6);
   padding: 0.65rem 0.85rlh;
   font-size: 0.65rlh;
   font-family: inherit;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   border: none;
-  border-right: 1px solid var(--ui-border);
   background: transparent;
   border-radius: 0;
   cursor: pointer;
-  transition: all 0.15s ease;
+  /* 0.85px hack to force sharp rendering */
+  box-shadow:
+    -0.85px 0 0 0 var(--ui-border),
+    0 -0.85px 0 0 var(--ui-border);
+
+  will-change: box-shadow;
+
+  transition: background 0.15s ease;
   color: inherit;
   user-select: none;
-  &:last-child {
-    border-right: none;
-    padding-right: 1.25rlh;
-  }
-  &:first-child {
-    padding-left: 1.25rlh;
-  }
   &:hover {
-    background-color: var(--ui-border);
+    background: var(--ui-border);
   }
-}
-
-.stateButton + .stateButton {
-  margin-left: -1px; /* collapse adjacent borders */
-}
-
-.stateButton:first-child {
-  border-top-left-radius: 4px;
-  border-bottom-left-radius: 4px;
-}
-
-.stateButton:last-child {
-  border-top-right-radius: 4px;
-  border-bottom-right-radius: 4px;
 }
 
 .stateButton[data-active="true"] {
-  border-color: currentColor;
   background: currentColor;
 }
 
