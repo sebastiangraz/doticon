@@ -10,7 +10,7 @@ import styles from "../../index.module.css";
 
 export const Route = createFileRoute("/_shell/")({
   component: () => {
-    const GRID_SIZE_OPTIONS = [3, 4, 5, 7] as const; //TODO: add back to 3,4,7
+    const GRID_SIZE_OPTIONS = [3, 4, 7] as const;
     const [icon3dState, setIcon3dState] = useState<StateKey>("dormant");
     const [gridSize, setGridSize] = useState(4);
     const [gridSizeInput, setGridSizeInput] = useState(gridSize);
