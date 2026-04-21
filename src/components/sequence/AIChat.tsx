@@ -15,16 +15,18 @@ type StepId =
   | "thinking"
   | "typing"
   | "settle"
-  | "success";
+  | "success"
+  | "end";
 
 const STEPS: readonly SequenceStep<StepId>[] = [
-  { id: "idle", duration: 700 },
+  { id: "idle", duration: 1000 },
   { id: "user", duration: 800 },
-  { id: "dormant", duration: 500 },
+  { id: "dormant", duration: 1000 },
   { id: "thinking", duration: 700 },
   { id: "typing", duration: 1700 },
   { id: "settle", duration: 1000 },
-  { id: "success", duration: 1500 },
+  { id: "success", duration: 2000 },
+  { id: "end", duration: 3500 },
 ];
 
 // During `idle` we keep the icon at `success` so the AI bubble can fade out
@@ -32,13 +34,14 @@ const STEPS: readonly SequenceStep<StepId>[] = [
 // while the bubble is still fully invisible, so the next cycle fades back
 // in with a fresh state.
 const ICON_FOR_STEP: Record<StepId, StateKey> = {
-  idle: "success",
+  idle: "dormant",
   user: "dormant",
-  dormant: "dormant",
+  dormant: "hover",
   thinking: "thinking",
   typing: "thinking",
   settle: "thinking",
   success: "success",
+  end: "ping",
 };
 
 const bubbleTransition = {
@@ -46,7 +49,7 @@ const bubbleTransition = {
   ease: "easeOut",
 } as const;
 
-const HIDDEN = { opacity: 0, y: 6, scale: 0.96 };
+const HIDDEN = { opacity: 0, y: 6, scale: 0.98 };
 const SHOWN = { opacity: 1, y: 0, scale: 1 };
 
 const AIChat = () => {
@@ -90,8 +93,8 @@ const AIChat = () => {
             key={cycle}
             text={AI_RESPONSE}
             inView={revealText}
-            staggerDelay={100}
-            maxCharDelay={600}
+            staggerDelay={60}
+            maxCharDelay={300}
           />
         </motion.div>
       </div>

@@ -29,10 +29,10 @@ export function ScrambleText({
   text,
   inView = true,
   maxCharDelay = 1200,
-  scrambleTimes = 2,
+  scrambleTimes = 3,
   scrambleInterval = 130,
   staggerDelay = 12,
-  initialOpacity = 0.3,
+  initialOpacity = 0,
 }: ScrambleTextProps) {
   const wordsArray = useMemo(() => {
     const initialText = text.split(/(\s+)/);
@@ -45,6 +45,7 @@ export function ScrambleText({
         char: isIgnorableChar(char) ? char : getRandomChar(), // Initialize to scrambled char or keep ignorable chars
         originalChar: char, // Store the original character
         isScrambled: !isIgnorableChar(char), // Start as scrambled if not ignorable
+        isScrambling: false, // Tracks whether the char is actively animating
         isRevealed: false,
         key: `${wordIndex}-${charIndex}`,
       })),
@@ -132,6 +133,7 @@ export function ScrambleText({
                                 ...c,
                                 char: c.originalChar,
                                 isScrambled: false,
+                                isScrambling: false,
                                 isRevealed: true,
                               }
                             : c,
@@ -164,6 +166,7 @@ export function ScrambleText({
                               ...c,
                               char: getRandomChar(),
                               isScrambled: true,
+                              isScrambling: true,
                               isRevealed: false,
                             }
                           : c,
@@ -212,18 +215,25 @@ export function ScrambleText({
     <span className="word-container">
       {words.map((wordObj) => (
         <span key={wordObj.key} className="word">
-          {wordObj.chars.map((charObj) => (
-            <span
-              key={charObj.key}
-              className="char"
-              style={{
-                opacity: charObj.isRevealed ? 1 : initialOpacity, // Use isRevealed to control opacity
-                transition: "0.48s ease opacity",
-              }}
-            >
-              {charObj.char}
-            </span>
-          ))}
+          {wordObj.chars.map((charObj) => {
+            const opacity = charObj.isRevealed
+              ? 1
+              : charObj.isScrambling
+                ? 0.3
+                : initialOpacity;
+            return (
+              <span
+                key={charObj.key}
+                className="char"
+                style={{
+                  opacity,
+                  transition: "0.48s ease opacity",
+                }}
+              >
+                {charObj.char}
+              </span>
+            );
+          })}
         </span>
       ))}
     </span>
