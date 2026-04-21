@@ -6,6 +6,7 @@ import DotIcon, {
   STATE_KEYS,
   type StateKey,
 } from "#/components/DotIcon/DotIcon";
+import AIChat from "#/components/sequence/AIChat";
 import styles from "../../index.module.css";
 
 export const Route = createFileRoute("/_shell/")({
@@ -201,17 +202,7 @@ export const Route = createFileRoute("/_shell/")({
             <DotIcon size={100} state={iconState} grid={7} />
           </div>
 
-          <div className={`${styles.column} ${styles.card}`}>
-            <div className={styles.chat}>
-              <div className={`${styles.bubble} ${styles.user}`}>
-                Summarise my last three files
-              </div>
-              <div className={`${styles.bubble}`}>
-                <DotIcon size={16} state={iconState} grid={4} />
-                <div>Here are the highlights from your last three files…</div>
-              </div>
-            </div>
-          </div>
+          <AIChat />
 
           <div className={`${styles.column} ${styles.card}`}></div>
           <div className={`${styles.column} ${styles.card}`}></div>
