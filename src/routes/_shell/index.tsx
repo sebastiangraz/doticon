@@ -11,7 +11,7 @@ import styles from "../../index.module.css";
 export const Route = createFileRoute("/_shell/")({
   component: () => {
     const GRID_SIZE_OPTIONS = [3, 4, 7] as const;
-    const [icon3dState, setIcon3dState] = useState<StateKey>("dormant");
+    const [iconState, seticonState] = useState<StateKey>("dormant");
     const [gridSize, setGridSize] = useState(4);
     const [gridSizeInput, setGridSizeInput] = useState(gridSize);
     const previewRef = useRef<HTMLDivElement | null>(null);
@@ -63,7 +63,7 @@ export const Route = createFileRoute("/_shell/")({
         <div className={styles.controlsRow}>
           <div className={styles.previewRow}>
             <div className={styles.previewWrap} ref={previewRef}>
-              <DotIcon size={100} state={icon3dState} grid={gridSize} />
+              <DotIcon size={100} state={iconState} grid={gridSize} />
 
               <button
                 type="button"
@@ -73,16 +73,16 @@ export const Route = createFileRoute("/_shell/")({
                 {didCopy ? "COPIED" : "COPY"}
               </button>
             </div>
-            <DotIcon size={20} state={icon3dState} grid={gridSize} />
+            <DotIcon size={20} state={iconState} grid={gridSize} />
           </div>
           <div className={styles.stateButtons}>
             {STATE_KEYS.map((key: StateKey) => {
-              const active = icon3dState === key;
+              const active = iconState === key;
               return (
                 <button
                   key={key}
                   type="button"
-                  onClick={() => setIcon3dState(key)}
+                  onClick={() => seticonState(key)}
                   className={styles.stateButton}
                   data-active={active ? "true" : "false"}
                 >
@@ -118,7 +118,7 @@ export const Route = createFileRoute("/_shell/")({
         <div className={`${styles.row} ${styles.inSitu}`}>
           <div className={`${styles.column} ${styles.card}`}>
             <button type="button" className={styles.button}>
-              <DotIcon size={16} state={icon3dState} grid={4} />
+              <DotIcon size={16} state={iconState} grid={4} />
               Generate
             </button>
           </div>
@@ -152,7 +152,7 @@ export const Route = createFileRoute("/_shell/")({
                   <td>Invoice #041</td>
                   <td>
                     <span className={styles.cell}>
-                      <DotIcon size={12} state={icon3dState} grid={3} />
+                      <DotIcon size={12} state={iconState} grid={3} />
                       Active
                     </span>
                   </td>
@@ -198,7 +198,7 @@ export const Route = createFileRoute("/_shell/")({
           <div
             className={`${styles.column} ${styles.card} ${styles.cardSocial}`}
           >
-            <DotIcon size={100} state={icon3dState} grid={7} />
+            <DotIcon size={100} state={iconState} grid={7} />
           </div>
 
           <div className={`${styles.column} ${styles.card}`}>
@@ -207,7 +207,7 @@ export const Route = createFileRoute("/_shell/")({
                 Summarise my last three files
               </div>
               <div className={`${styles.bubble}`}>
-                <DotIcon size={16} state={icon3dState} grid={4} />
+                <DotIcon size={16} state={iconState} grid={4} />
                 <div>Here are the highlights from your last three files…</div>
               </div>
             </div>
