@@ -537,7 +537,9 @@
   gap: 0.5rlh;
   padding: 8px 11px;
   font-size: 0.7rlh;
-  text-wrap: balance;
+  max-width: 70%;
+
+  /* text-wrap: balance; */
   & > *:not(svg) {
     color: var(--ui-secondary);
   }

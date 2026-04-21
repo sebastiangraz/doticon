@@ -1,13 +1,12 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import DotIcon, { type StateKey } from "#/components/DotIcon/DotIcon";
+import { ScrambleText } from "#/components/ScrambleText/ScrambleText";
 import styles from "../../index.module.css";
 import { useSequence, type SequenceStep } from "./useSequence";
 
 const USER_PROMPT = "Summarise my last three files";
 const AI_RESPONSE = "Here are the highlights from your last three files…";
-
-const TYPING_MS = 1600;
 
 type StepId =
   | "idle"
@@ -23,7 +22,7 @@ const STEPS: readonly SequenceStep<StepId>[] = [
   { id: "user", duration: 800 },
   { id: "dormant", duration: 500 },
   { id: "thinking", duration: 700 },
-  { id: "typing", duration: TYPING_MS + 120 },
+  { id: "typing", duration: 1700 },
   { id: "settle", duration: 1000 },
   { id: "success", duration: 1500 },
 ];
@@ -52,40 +51,20 @@ const SHOWN = { opacity: 1, y: 0, scale: 1 };
 
 const AIChat = () => {
   const { id, isAtOrAfter } = useSequence(STEPS);
-  const [typedCount, setTypedCount] = useState(0);
 
-  // Reset synchronously before paint when entering `typing`, so the first
-  // rendered frame never shows residual text from the prior cycle.
-  useLayoutEffect(() => {
-    if (id === "typing") setTypedCount(0);
-  }, [id]);
-
+  // Remount `ScrambleText` at the start of each new cycle so it resets to
+  // its scrambled initial state before the bubble fades back in. We
+  // increment on `user`, which happens while the AI bubble is still fully
+  // invisible — the remount is never visible to the user.
+  const [cycle, setCycle] = useState(0);
   useEffect(() => {
-    if (id !== "typing") return;
-    const start = performance.now();
-    let raf = 0;
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / TYPING_MS);
-      setTypedCount(Math.floor(t * AI_RESPONSE.length));
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    if (id === "user") setCycle((c) => c + 1);
   }, [id]);
 
   const userVisible = id !== "idle" && isAtOrAfter("user");
   const aiVisible = id !== "idle" && isAtOrAfter("dormant");
   const iconState = ICON_FOR_STEP[id];
-
-  // Text derivation mirrors the icon logic: preserve the full response
-  // during `idle` (fade-out) and clear during `user` (still invisible) so
-  // the next cycle starts empty.
-  const shownText =
-    id === "typing"
-      ? AI_RESPONSE.slice(0, typedCount)
-      : id === "settle" || id === "success" || id === "idle"
-        ? AI_RESPONSE
-        : "";
+  const revealText = id !== "idle" && isAtOrAfter("typing");
 
   return (
     <div className={`${styles.column} ${styles.card}`}>
@@ -107,26 +86,13 @@ const AIChat = () => {
           layout="position"
         >
           <DotIcon size={16} state={iconState} grid={4} />
-          <div>
-            {shownText}
-            {id === "typing" ? (
-              <motion.span
-                aria-hidden
-                animate={{ opacity: [1, 0, 1] }}
-                transition={{
-                  duration: 0.9,
-                  repeat: Infinity,
-                  ease: "linear",
-                }}
-                style={{
-                  display: "inline-block",
-                  marginLeft: 1,
-                }}
-              >
-                ▍
-              </motion.span>
-            ) : null}
-          </div>
+          <ScrambleText
+            key={cycle}
+            text={AI_RESPONSE}
+            inView={revealText}
+            staggerDelay={100}
+            maxCharDelay={600}
+          />
         </motion.div>
       </div>
     </div>
