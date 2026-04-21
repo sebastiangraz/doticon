@@ -195,6 +195,12 @@ export const Route = createFileRoute("/_shell/")({
             </table>
           </div>
 
+          <div
+            className={`${styles.column} ${styles.card} ${styles.cardSocial}`}
+          >
+            <DotIcon size={100} state={icon3dState} grid={7} />
+          </div>
+
           <div className={`${styles.column} ${styles.card}`}>
             <div className={styles.chat}>
               <div className={`${styles.bubble} ${styles.user}`}>
@@ -207,11 +213,8 @@ export const Route = createFileRoute("/_shell/")({
             </div>
           </div>
 
-          <div
-            className={`${styles.column} ${styles.card} ${styles.cardSocial}`}
-          >
-            <DotIcon size={100} state={icon3dState} grid={7} />
-          </div>
+          <div className={`${styles.column} ${styles.card}`}></div>
+          <div className={`${styles.column} ${styles.card}`}></div>
         </div>
         <div className={styles.row}>
           <div className={styles.column}>

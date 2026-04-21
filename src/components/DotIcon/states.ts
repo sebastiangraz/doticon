@@ -197,6 +197,11 @@ const STATE_META = {
     usage:
       "Randomized scanning sequence, use while indexing, searching, or ingesting files.",
   },
+  ping: {
+    label: "Ping",
+    usage:
+      "One-shot ripple outward from center, use to attract attention or signal a notification.",
+  },
   dev: {
     label: "Dev",
     usage: "Flat diagnostic grid for layout checks.",
@@ -216,6 +221,8 @@ export type StateDef = {
   projConfig: GridConfig;
   layoutSpeed?: number;
   opacitySpeed?: number;
+  /** Seconds after which the animation freezes (one-shot states). */
+  sequenceDuration?: number;
 };
 
 export const resolveOpacities = (
@@ -782,6 +789,96 @@ const indexingOpacities = (
   return out;
 };
 
+// ─── Ping ───────────────────────────────────────────────────────────────────────
+// One-shot ripple from centre outward on the dormant layout.
+// Each pass emits two concentric rings (large leading, small trailing).
+// The pair repeats twice, then the animation freezes at the dormant values.
+//
+// Ring distances are normalised to [0, 1] (0 = centre, 1 = corner) so the
+// timing constants are independent of grid size.
+
+const PING_SPEED = 2.5; // angle units / second
+const PING_TAIL = 0.4; // tent half-width for each ring
+const PING_GAP = 0.28; // large-ring-to-small-ring spacing (normalised dist)
+// Angle units needed for one pass to fully clear every dot:
+//   wave front must travel from 0 to (1 + PING_GAP + PING_TAIL) plus a small margin.
+const PING_PASS_DURATION = 1.0 + PING_GAP + PING_TAIL + 0.3; // ≈ 1.98
+const PING_BETWEEN = 0.8; // quiet gap between the two passes
+const PING_TOTAL_ANGLE = PING_PASS_DURATION * 2 + PING_BETWEEN; // ≈ 4.76
+/** Seconds until the animation is completely done and can be frozen. */
+const PING_SEQ_DURATION = (PING_TOTAL_ANGLE + 0.5) / PING_SPEED; // ≈ 2.1 s
+
+const buildPingRingDists = (proj: GridConfig): number[] => {
+  const cx = proj.grid.center;
+  const maxDist = Math.sqrt(2) * cx; // Euclidean distance from centre to corner
+  return Array.from({ length: proj.dotCount }, (_, i) => {
+    const dx = (i % proj.n) - cx;
+    const dy = Math.floor(i / proj.n) - cx;
+    return maxDist > 0 ? Math.sqrt(dx * dx + dy * dy) / maxDist : 0;
+  });
+};
+
+// Parabolic tent peaking at the midpoint of (0, tail), zero outside.
+const pingTent = (d: number, tail: number): number => {
+  if (d <= 0 || d >= tail) return 0;
+  const u = d / tail;
+  return 4 * u * (1 - u);
+};
+
+// Returns the peak pulse values from both rings across both passes at the
+// given angle for a dot sitting at normalised ring distance `rd`.
+const pingPulses = (
+  angle: number,
+  rd: number,
+): { pLarge: number; pSmall: number } => {
+  let pLarge = 0;
+  let pSmall = 0;
+
+  // Pass 1 — wave front starts at 0, the small ring trails by PING_GAP.
+  const wf1 = angle;
+  pLarge = Math.max(pLarge, pingTent(wf1 - rd, PING_TAIL));
+  pSmall = Math.max(pSmall, pingTent(wf1 - PING_GAP - rd, PING_TAIL));
+
+  // Pass 2 — identical wave shifted forward in time.
+  const pass2Start = PING_PASS_DURATION + PING_BETWEEN;
+  if (angle >= pass2Start) {
+    const wf2 = angle - pass2Start;
+    pLarge = Math.max(pLarge, pingTent(wf2 - rd, PING_TAIL));
+    pSmall = Math.max(pSmall, pingTent(wf2 - PING_GAP - rd, PING_TAIL));
+  }
+
+  return { pLarge, pSmall };
+};
+
+const pingLayout = (
+  proj: GridConfig,
+  ringDists: number[],
+  baseZ: readonly number[],
+  angle = 0,
+): Vec3[] =>
+  Array.from({ length: proj.dotCount }, (_, i) => {
+    const x = i % proj.n;
+    const y = Math.floor(i / proj.n);
+    const bz = baseZ[i]!;
+    const { pLarge, pSmall } = pingPulses(angle, ringDists[i]!);
+    const rise = 2.0 * pLarge + 1.0 * pSmall;
+    return { x, y, z: clamp(bz + rise, 0, 4) };
+  });
+
+const pingOpacities = (
+  proj: GridConfig,
+  ringDists: number[],
+  baseOpa: readonly number[],
+  angle: number,
+): number[] =>
+  Array.from({ length: proj.dotCount }, (_, i) => {
+    const base = baseOpa[i]!;
+    if (base === 0) return 0;
+    const { pLarge, pSmall } = pingPulses(angle, ringDists[i]!);
+    const boost = 0.7 * pLarge + 0.4 * pSmall;
+    return clamp(lerp(base, 1, boost), 0, 1);
+  });
+
 // ─── Error ──────────────────────────────────────────────────────────────────────
 // X pattern (main + anti diagonal) with an outward ripple. Non-X dots stay at
 // 0.12 / baseZ. Wave expands by Chebyshev ring so all four arms move together.
@@ -867,6 +964,7 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const successOpa = buildSuccessOpacities(config.n);
   const hoverBaseZ = flatGrid(dormantProj, dormantZ).map((p) => p.z);
   const hoverRanks = buildHoverRanks(dormantProj.n);
+  const pingRingDists = buildPingRingDists(dormantProj);
   const sphere = buildSphereBase(config);
   const processingCube = buildProcessingCubeBase(config.dotCount);
   const ranks = buildLoadingRanks(config);
@@ -895,6 +993,16 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
         hoverOpacities(dormantProj, hoverRanks, dormantOpa, ctx.opacityAngle),
       animated: true,
       layoutSpeed: HOVER_SPEED,
+      projConfig: dormantProj,
+    },
+    ping: {
+      label: STATE_META.ping.label,
+      layout: (a = 0) => pingLayout(dormantProj, pingRingDists, hoverBaseZ, a),
+      opacities: (ctx) =>
+        pingOpacities(dormantProj, pingRingDists, dormantOpa, ctx.opacityAngle),
+      animated: true,
+      layoutSpeed: PING_SPEED,
+      sequenceDuration: PING_SEQ_DURATION,
       projConfig: dormantProj,
     },
     thinking: {

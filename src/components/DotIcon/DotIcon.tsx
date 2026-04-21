@@ -98,6 +98,9 @@ const DotIcon = ({
   const springsRef = useRef<DotSpring[]>([]);
   const springActiveRef = useRef(false);
 
+  // ─── One-shot sequence tracking ───────────────────────────────────────
+  const seqDoneRef = useRef(false);
+
   // ─── Opacity crossfade ────────────────────────────────────────────────
   const opaTrRef = useRef<{
     state: StateKey;
@@ -162,6 +165,7 @@ const DotIcon = ({
   useLayoutEffect(() => {
     phaseStartMsRef.current = time.get();
     prevMsRef.current = time.get();
+    seqDoneRef.current = false;
 
     // Snapshot current opacities for crossfade
     const fromOpa: number[] = [];
@@ -208,16 +212,28 @@ const DotIcon = ({
 
     const hasSprings = springActiveRef.current;
     const hasOpaTr = opaTrRef.current?.state === key;
+    const seqDone = seqDoneRef.current;
 
     if (!def.animated && !hasSprings && !hasOpaTr) return;
+    // One-shot state: skip further updates once sequence is frozen and all
+    // transitions have settled.
+    if (def.animated && seqDone && !hasSprings && !hasOpaTr) return;
 
     // Compute angle (0 for non-animated states)
     let layoutAngle = 0;
     let opacityAngle = 0;
     if (def.animated) {
-      const t = (ms - phaseStartMsRef.current) / 1000;
+      const rawT = (ms - phaseStartMsRef.current) / 1000;
+      const t =
+        def.sequenceDuration != null
+          ? Math.min(rawT, def.sequenceDuration)
+          : rawT;
       layoutAngle = (def.layoutSpeed ?? 0) * t;
       opacityAngle = (def.opacitySpeed ?? def.layoutSpeed ?? 0) * t;
+      // Mark sequence complete so subsequent frames can early-exit.
+      if (def.sequenceDuration != null && rawT >= def.sequenceDuration) {
+        seqDoneRef.current = true;
+      }
     }
 
     const layout = def.layout(layoutAngle);

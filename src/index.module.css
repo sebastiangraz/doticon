@@ -182,12 +182,11 @@
   display: flex;
   flex-wrap: wrap;
   overflow: clip;
-  /* filter: drop-shadow(0 0 1px red); */
   background: transparent;
-  border-radius: 0.25rlh;
+  border-radius: 1.75rlh;
+  corner-shape: superellipse(1.4);
   overflow: hidden;
   outline: 1px var(--ui-border) solid;
-  /* clip-path: xywh(0 0 100% 100% round 0.25rlh); */
   outline-offset: -1px;
 }
 
@@ -425,17 +424,12 @@
 
 .inSitu {
   gap: 0;
-  border: 1px solid var(--ui-border);
-}
-
-/* .inSituGrid {
+  outline: 1px var(--ui-border) solid;
+  outline-offset: -1px;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border: 1px solid var(--ui-border);
-  border-radius: 8px;
-  overflow: hidden;
-  width: 100%;
-} */
+  overflow: clip;
+  grid-template-columns: repeat(3, 1fr);
+}
 
 .card {
   /* padding: 1.5rlh; */
@@ -443,12 +437,16 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 180px;
-  border-right: 1px solid var(--ui-border);
+  min-height: 208px;
+  /* border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border); */
+  box-shadow:
+    -0.85px 0 0 0 var(--ui-border),
+    0 -0.85px 0 0 var(--ui-border);
   overflow: clip;
-  &:last-child {
+  /* &:last-child {
     border-right: none;
-  }
+  } */
 }
 
 /* — Button — */
