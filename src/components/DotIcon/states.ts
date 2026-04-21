@@ -791,22 +791,30 @@ const indexingOpacities = (
 
 // ─── Ping ───────────────────────────────────────────────────────────────────────
 // One-shot ripple from centre outward on the dormant layout.
-// Each pass emits two concentric rings (large leading, small trailing).
-// The pair repeats twice, then the animation freezes at the dormant values.
+//
+// Model (mirrors loadingLayout in spirit): the dormant layout is the rest
+// state. Wavefronts sweep outward in ring-distance space; as each wave
+// front crosses a dot, that dot's target dips briefly toward a shrunken Z
+// / dimmed opacity, then returns. Rest state = dormant naturally, so after
+// the last wave has passed all targets collapse back to baseline. The
+// spring layer supplies all smoothing — there are no discrete phases.
+//
+// Four wavefronts are emitted in total: two concentric rings (large
+// leading, small trailing), fired twice with a short quiet gap between.
 //
 // Ring distances are normalised to [0, 1] (0 = centre, 1 = corner) so the
 // timing constants are independent of grid size.
 
-const PING_SPEED = 2.5; // angle units / second
-const PING_TAIL = 0.4; // tent half-width for each ring
-const PING_GAP = 0.28; // large-ring-to-small-ring spacing (normalised dist)
-// Angle units needed for one pass to fully clear every dot:
-//   wave front must travel from 0 to (1 + PING_GAP + PING_TAIL) plus a small margin.
-const PING_PASS_DURATION = 1.0 + PING_GAP + PING_TAIL + 0.3; // ≈ 1.98
-const PING_BETWEEN = 0.8; // quiet gap between the two passes
-const PING_TOTAL_ANGLE = PING_PASS_DURATION * 2 + PING_BETWEEN; // ≈ 4.76
+const PING_SPEED = 2; // angle units / second
+const PING_DIP = 1; // Z units the dip pulls each dot down
+const PING_TAIL = 1; // half-width (in ring-dist units) of each ring pulse
+const PING_GAP = 0.2; // small ring trails the large ring by this much
+const PING_PASS_SPAN = 1.0 + PING_GAP + PING_TAIL; // wavefront sweeps until clear
+const PING_BETWEEN = 0.5; // quiet gap between the two passes
+const PING_PASS2_OFFSET = PING_PASS_SPAN + PING_BETWEEN;
+const PING_TOTAL_ANGLE = PING_PASS2_OFFSET + PING_PASS_SPAN;
 /** Seconds until the animation is completely done and can be frozen. */
-const PING_SEQ_DURATION = (PING_TOTAL_ANGLE + 0.5) / PING_SPEED; // ≈ 2.1 s
+const PING_SEQ_DURATION = (PING_TOTAL_ANGLE + 0.3) / PING_SPEED;
 
 const buildPingRingDists = (proj: GridConfig): number[] => {
   const cx = proj.grid.center;
@@ -825,29 +833,20 @@ const pingTent = (d: number, tail: number): number => {
   return 4 * u * (1 - u);
 };
 
-// Returns the peak pulse values from both rings across both passes at the
-// given angle for a dot sitting at normalised ring distance `rd`.
-const pingPulses = (
-  angle: number,
-  rd: number,
-): { pLarge: number; pSmall: number } => {
-  let pLarge = 0;
-  let pSmall = 0;
-
-  // Pass 1 — wave front starts at 0, the small ring trails by PING_GAP.
-  const wf1 = angle;
-  pLarge = Math.max(pLarge, pingTent(wf1 - rd, PING_TAIL));
-  pSmall = Math.max(pSmall, pingTent(wf1 - PING_GAP - rd, PING_TAIL));
-
-  // Pass 2 — identical wave shifted forward in time.
-  const pass2Start = PING_PASS_DURATION + PING_BETWEEN;
-  if (angle >= pass2Start) {
-    const wf2 = angle - pass2Start;
-    pLarge = Math.max(pLarge, pingTent(wf2 - rd, PING_TAIL));
-    pSmall = Math.max(pSmall, pingTent(wf2 - PING_GAP - rd, PING_TAIL));
-  }
-
-  return { pLarge, pSmall };
+// Dip intensity [0..1] at the given angle for a dot at normalised ring
+// distance `rd`. Peaks as each ring's wave front crosses the dot; large
+// ring pulses at full strength, small ring trails at 0.6×.
+const pingIntensity = (angle: number, rd: number): number => {
+  const a = angle - rd;
+  const b = a - PING_GAP;
+  const c = a - PING_PASS2_OFFSET;
+  const d = c - PING_GAP;
+  return Math.max(
+    pingTent(a, PING_TAIL),
+    0.6 * pingTent(b, PING_TAIL),
+    pingTent(c, PING_TAIL),
+    0.6 * pingTent(d, PING_TAIL),
+  );
 };
 
 const pingLayout = (
@@ -857,12 +856,14 @@ const pingLayout = (
   angle = 0,
 ): Vec3[] =>
   Array.from({ length: proj.dotCount }, (_, i) => {
-    const x = i % proj.n;
-    const y = Math.floor(i / proj.n);
     const bz = baseZ[i]!;
-    const { pLarge, pSmall } = pingPulses(angle, ringDists[i]!);
-    const rise = 2.0 * pLarge + 1.0 * pSmall;
-    return { x, y, z: clamp(bz + rise, 0, 4) };
+    const dipZ = Math.max(0, bz - PING_DIP);
+    const t = pingIntensity(angle, ringDists[i]!);
+    return {
+      x: i % proj.n,
+      y: Math.floor(i / proj.n),
+      z: lerp(bz, dipZ, t),
+    };
   });
 
 const pingOpacities = (
@@ -874,9 +875,8 @@ const pingOpacities = (
   Array.from({ length: proj.dotCount }, (_, i) => {
     const base = baseOpa[i]!;
     if (base === 0) return 0;
-    const { pLarge, pSmall } = pingPulses(angle, ringDists[i]!);
-    const boost = 0.7 * pLarge + 0.4 * pSmall;
-    return clamp(lerp(base, 1, boost), 0, 1);
+    const t = pingIntensity(angle, ringDists[i]!);
+    return lerp(base, 0.12, t);
   });
 
 // ─── Error ──────────────────────────────────────────────────────────────────────
