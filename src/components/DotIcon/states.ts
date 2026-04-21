@@ -805,7 +805,7 @@ const indexingOpacities = (
 
 const PING_SPEED = 3; // angle units / second
 const PING_DIP = 2; // Z units the dip pulls each dot down
-const PING_TAIL = 1.5; // width (in ring-dist units) of the ring pulse
+const PING_TAIL = 1.25; // width (in ring-dist units) of the ring pulse
 const PING_PASS_OFFSET = 0.1 + PING_TAIL + 1; // wave clears + quiet gap
 const PING_TOTAL_ANGLE = PING_PASS_OFFSET + 1 + PING_TAIL;
 /** Seconds until the animation is completely done and can be frozen. */
