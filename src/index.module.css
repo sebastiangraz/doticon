@@ -184,6 +184,7 @@
   overflow: clip;
   background: transparent;
   border-radius: 1.75rlh;
+  max-width: 720px;
   corner-shape: superellipse(1.4);
   overflow: hidden;
   outline: 1px var(--ui-border) solid;
