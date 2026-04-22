@@ -43,7 +43,6 @@
     & > * {
       display: flex;
       flex-direction: row;
-      /* flex-wrap: wrap; */
       justify-content: flex-start;
       align-items: center;
     }
@@ -88,7 +87,6 @@
 }
 
 .controlsRow {
-  /* max-width: 720px; */
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -184,7 +182,7 @@
   overflow: clip;
   background: transparent;
   border-radius: 1.75rlh;
-  max-width: 720px;
+  max-width: 652px;
   corner-shape: superellipse(1.4);
   overflow: hidden;
   outline: 1px var(--ui-border) solid;
@@ -196,7 +194,6 @@
 .stateButton {
   flex: 1 1 0%;
   min-width: unset;
-  /* max-width: clamp(100px, 100%, 300px); */
   padding: 0.65rem 0.85rlh;
   font-size: 0.65rlh;
   font-family: inherit;
@@ -273,7 +270,7 @@
   border-radius: 999px;
   background: light-dark(var(--ui-background), var(--ui-foreground));
   box-shadow: 0 0 0 1px var(--ui-border);
-  margin-top: -7px; /* center thumb on 4px track */
+  margin-top: -7px;
 }
 
 .gridSlider:focus-visible {
@@ -439,28 +436,21 @@
 }
 
 .card {
-  /* padding: 1.5rlh; */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 208px;
-  /* border-right: 1px solid var(--ui-border);
-  border-bottom: 1px solid var(--ui-border); */
   box-shadow:
     -0.85px 0 0 0 var(--ui-border),
     0 -0.85px 0 0 var(--ui-border);
   overflow: clip;
-  /* &:last-child {
-    border-right: none;
-  } */
 }
-
-/* — Button — */
 
 .button {
   display: inline-flex;
-  align-items: flex-start;
+  align-items: center;
+
   gap: 12px;
   padding: 0.5rlh 0.85rlh;
   font-size: 0.75rlh;
@@ -469,6 +459,7 @@
   text-box-edge: cap alphabetic;
   text-box-trim: trim-both;
   letter-spacing: 0.04em;
+  line-height: 1;
   border: 1px solid var(--ui-border);
   border-radius: 99em;
   background: transparent;
@@ -482,8 +473,6 @@
     background: var(--ui-border);
   }
 }
-
-/* — Table — */
 
 .table {
   width: 100%;
@@ -545,8 +534,6 @@
   padding: 8px 11px;
   font-size: 0.7rlh;
   max-width: 70%;
-
-  /* text-wrap: balance; */
   & > *:not(svg) {
     color: var(--ui-secondary);
   }
@@ -565,7 +552,11 @@
   }
 }
 
-/* Scroll-linked parallax for the WebGL backdrop (see _shell.tsx). */
+.cardTable {
+  height: 128px;
+  overflow: hidden;
+}
+
 @keyframes shaderParallaxShift {
   from {
     transform: translate3d(0, 0, 0);
@@ -584,7 +575,6 @@
 
 @supports (animation-timeline: scroll()) {
   .shaderParallax {
-    /* Duration is ignored for scroll timelines; any non-zero value satisfies the shorthand. */
     animation: shaderParallaxShift 1s linear both;
     animation-timeline: scroll();
   }

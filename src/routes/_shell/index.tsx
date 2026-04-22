@@ -124,9 +124,18 @@ export const Route = createFileRoute("/_shell/")({
             </button>
           </div>
 
-          <div className={`${styles.column} ${styles.card}`}>
+          <div
+            className={`${styles.column} ${styles.card} ${styles.cardTable}`}
+          >
             <table className={styles.table}>
               <tbody>
+                <tr>
+                  <td />
+                  <td />
+                  <td />
+                  <td />
+                  <td />
+                </tr>
                 <tr>
                   <td />
                   <td />
@@ -176,6 +185,13 @@ export const Route = createFileRoute("/_shell/")({
                     <span style={{ color: "var(--ui-tertiary)" }}>Closed</span>
                   </td>
                   <td>$3,400</td>
+                  <td />
+                </tr>
+                <tr>
+                  <td />
+                  <td />
+                  <td />
+                  <td />
                   <td />
                 </tr>
                 <tr>
