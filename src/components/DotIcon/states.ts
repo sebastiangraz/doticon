@@ -1054,7 +1054,7 @@ const thinkingOpacities = (
   Array.from({ length: config.dotCount }, (_, i) => {
     if (i >= visibleCount) return 0;
     const r = rotateThinkingAxis(cube[i]!, layoutAngle);
-    return clamp((r.z + 1) / 2, 0, 1);
+    return clamp(0.5 + r.z * 1.5 - 0.3, 0, 1);
   });
 
 // ─── Build ──────────────────────────────────────────────────────────────────────
