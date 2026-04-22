@@ -967,10 +967,10 @@ const errorOpacities = (
 // screen's bottom-left to back-top-right at θ=π and returns at θ=2π.
 // Depth (z) and opacity are intentionally flat at this stage — layout-only.
 
-const THINKING_SPEED = 0.9; // radians / second
+const THINKING_SPEED = 2; // radians / second
 const THINKING_CABINET_ANGLE = Math.PI / 4;
 const THINKING_DEPTH_SCALE = 0.5; // classic cabinet foreshortening
-const THINKING_CUBE_SCALE = 0.55; // keeps the rotated cube inside the grid
+const THINKING_CUBE_SCALE = 0.7; // keeps the rotated cube inside the grid
 // Each face reads as the 5-pip side of a die: 4 shared corners + 1 face centre.
 // 8 corners + 6 face centres = 14 visible dots; extra slots are hidden.
 const THINKING_DICE_COUNT = 8 + 6;
@@ -1016,10 +1016,21 @@ const thinkingLayout = (
     return {
       x: cx + (r.x + r.z * depthX) * cx * THINKING_CUBE_SCALE,
       y: cx + (r.y - r.z * depthY) * cx * THINKING_CUBE_SCALE,
-      z: baseZ,
+      z: baseZ * (0.5 + 0.6 * r.z),
     };
   });
 };
+
+const thinkingOpacities = (
+  config: GridConfig,
+  cube: Vec3[],
+  layoutAngle: number,
+): number[] =>
+  Array.from({ length: config.dotCount }, (_, i) => {
+    if (i >= THINKING_DICE_COUNT) return 0;
+    const r = rotateThinkingAxis(cube[i]!, layoutAngle);
+    return clamp((r.z + 1) / 2, 0, 1);
+  });
 
 // ─── Build ──────────────────────────────────────────────────────────────────────
 
@@ -1040,11 +1051,6 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   // projection has enough dots to read as a cube.
   const thinkingProj = config.n === 3 ? buildGridConfig(4) : config;
   const thinkingCube = buildThinkingCubeBase(thinkingProj.dotCount);
-  // Mask padding slots to opacity 0 — only the 8 corners + 6 face centres
-  // (the dice-5 pattern per face) are ever visible.
-  const thinkingOpa = Array.from({ length: thinkingProj.dotCount }, (_, i) =>
-    i < THINKING_DICE_COUNT ? 1 : 0,
-  );
   const ranks = buildLoadingRanks(config);
   const errorData = buildErrorData(config);
   const indexingSeq = buildIndexingSequence(config);
@@ -1111,7 +1117,8 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     thinking: {
       label: STATE_META.thinking.label,
       layout: (a = 0) => thinkingLayout(thinkingProj, thinkingCube, a),
-      opacities: thinkingOpa,
+      opacities: (ctx) =>
+        thinkingOpacities(thinkingProj, thinkingCube, ctx.layoutAngle),
       animated: true,
       layoutSpeed: THINKING_SPEED,
       projConfig: thinkingProj,
