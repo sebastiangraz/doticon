@@ -967,7 +967,7 @@ const errorOpacities = (
 // screen's bottom-left to back-top-right at θ=π and returns at θ=2π.
 // Depth (z) and opacity are intentionally flat at this stage — layout-only.
 
-const THINKING_SPEED = 1; // radians / second
+const THINKING_SPEED = 2; // radians / second
 const THINKING_CABINET_ANGLE = Math.PI / 4;
 const THINKING_DEPTH_SCALE = 0.5; // classic cabinet foreshortening
 const THINKING_CUBE_SCALE = 0.7; // keeps the rotated cube inside the grid
