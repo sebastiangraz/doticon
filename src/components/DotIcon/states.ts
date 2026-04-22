@@ -340,6 +340,16 @@ const CUBE_EDGE_MIDPOINTS: readonly Vec3[] = [
   { x: -1, y: -1, z: 0 }, { x: -1, y: 1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 },
 ];
 
+// Centres of the 6 cube faces (one coordinate ±1, other two 0).
+const CUBE_FACE_CENTERS: readonly Vec3[] = [
+  { x: 0, y: 0, z: 1 },
+  { x: 0, y: 0, z: -1 },
+  { x: 1, y: 0, z: 0 },
+  { x: -1, y: 0, z: 0 },
+  { x: 0, y: 1, z: 0 },
+  { x: 0, y: -1, z: 0 },
+];
+
 const vecKey = (p: Vec3): string =>
   `${quantizeFloat(p.x)},${quantizeFloat(p.y)},${quantizeFloat(p.z)}`;
 
@@ -961,6 +971,22 @@ const THINKING_SPEED = 0.9; // radians / second
 const THINKING_CABINET_ANGLE = Math.PI / 4;
 const THINKING_DEPTH_SCALE = 0.5; // classic cabinet foreshortening
 const THINKING_CUBE_SCALE = 0.55; // keeps the rotated cube inside the grid
+// Each face reads as the 5-pip side of a die: 4 shared corners + 1 face centre.
+// 8 corners + 6 face centres = 14 visible dots; extra slots are hidden.
+const THINKING_DICE_COUNT = 8 + 6;
+
+// 8 cube corners, then 6 face centres, then arbitrary padding slots. The
+// padding positions don't matter because the thinking state masks them to
+// opacity 0 — keeping the dot array length aligned with `dotCount` so the
+// crossfade into/out of the state stays stable.
+const buildThinkingCubeBase = (dotCount: number): Vec3[] => {
+  const out: Vec3[] = [];
+  for (let i = 0; i < Math.min(8, dotCount); i++) out.push(CUBE_CORNERS[i]!);
+  for (let i = 0; i < 6 && out.length < dotCount; i++)
+    out.push(CUBE_FACE_CENTERS[i]!);
+  while (out.length < dotCount) out.push({ x: 0, y: 0, z: 0 });
+  return out;
+};
 
 // Rodrigues rotation around (1, 1, 0)/√2, closed-form. Using positive `angle`
 // spins the front-bottom-left vertex toward the top-right diagonal first.
@@ -1010,8 +1036,15 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const pingRingDists = buildPingRingDists(dormantProj);
   const sphere = buildSphereBase(config);
   const organizingCube = buildOrganizingCubeBase(config.dotCount);
+  // Thinking clamps 3×3 to a 4×4 projection (like dormant) so the cabinet
+  // projection has enough dots to read as a cube.
   const thinkingProj = config.n === 3 ? buildGridConfig(4) : config;
-  const thinkingCube = buildOrganizingCubeBase(thinkingProj.dotCount);
+  const thinkingCube = buildThinkingCubeBase(thinkingProj.dotCount);
+  // Mask padding slots to opacity 0 — only the 8 corners + 6 face centres
+  // (the dice-5 pattern per face) are ever visible.
+  const thinkingOpa = Array.from({ length: thinkingProj.dotCount }, (_, i) =>
+    i < THINKING_DICE_COUNT ? 1 : 0,
+  );
   const ranks = buildLoadingRanks(config);
   const errorData = buildErrorData(config);
   const indexingSeq = buildIndexingSequence(config);
@@ -1078,7 +1111,7 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     thinking: {
       label: STATE_META.thinking.label,
       layout: (a = 0) => thinkingLayout(thinkingProj, thinkingCube, a),
-      opacities: Array.from({ length: thinkingProj.dotCount }, () => 1),
+      opacities: thinkingOpa,
       animated: true,
       layoutSpeed: THINKING_SPEED,
       projConfig: thinkingProj,
