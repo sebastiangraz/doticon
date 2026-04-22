@@ -237,13 +237,13 @@ export const Route = createFileRoute("/_shell/")({
           </div>
           <div className={styles.column}>
             <ExposeProps className={styles.prop}>
-              <DotIcon size={80} state={"thinking"} grid={5} />
+              <DotIcon size={80} state={"compiling"} grid={5} />
             </ExposeProps>
             <ExposeProps className={styles.prop}>
-              <DotIcon size={32} state={"thinking"} />
-              <DotIcon size={24} state={"thinking"} />
-              <DotIcon size={16} state={"thinking"} grid={3} />
-              <DotIcon size={12} state={"thinking"} grid={3} />
+              <DotIcon size={32} state={"compiling"} />
+              <DotIcon size={24} state={"compiling"} />
+              <DotIcon size={16} state={"compiling"} grid={3} />
+              <DotIcon size={12} state={"compiling"} grid={3} />
             </ExposeProps>
           </div>
           <div className={styles.column}>

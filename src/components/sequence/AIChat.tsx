@@ -12,7 +12,7 @@ type StepId =
   | "idle"
   | "user"
   | "dormant"
-  | "thinking"
+  | "compiling"
   | "typing"
   | "settle"
   | "success"
@@ -22,7 +22,7 @@ const STEPS: readonly SequenceStep<StepId>[] = [
   { id: "idle", duration: 1000 },
   { id: "user", duration: 800 },
   { id: "dormant", duration: 1000 },
-  { id: "thinking", duration: 700 },
+  { id: "compiling", duration: 700 },
   { id: "typing", duration: 1700 },
   { id: "settle", duration: 1000 },
   { id: "success", duration: 2000 },
@@ -37,9 +37,9 @@ const ICON_FOR_STEP: Record<StepId, StateKey> = {
   idle: "dormant",
   user: "dormant",
   dormant: "hover",
-  thinking: "thinking",
-  typing: "thinking",
-  settle: "thinking",
+  compiling: "compiling",
+  typing: "compiling",
+  settle: "compiling",
   success: "success",
   end: "ping",
 };

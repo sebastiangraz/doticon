@@ -174,10 +174,9 @@ const STATE_META = {
     usage:
       "One-shot ripple outward from center, use to attract attention or signal a notification.",
   },
-  thinking: {
-    label: "Thinking",
-    usage:
-      "Sphere motion, use for open-ended work or “assistant is considering.”",
+  compiling: {
+    label: "Compiling",
+    usage: "Sphere motion, use for compiling, building, or “work in progress.”",
   },
   processing: {
     label: "Processing",
@@ -255,7 +254,7 @@ const flatGrid = (
   }));
 };
 
-// Fibonacci sphere for the thinking state.
+// Fibonacci sphere for the compiling state.
 const buildSphereBase = (config: GridConfig): Vec3[] => {
   const { dotCount } = config;
   const phi = Math.PI * (3 - Math.sqrt(5));
@@ -267,9 +266,9 @@ const buildSphereBase = (config: GridConfig): Vec3[] => {
   });
 };
 
-const THINKING_OVERSHOOT = 1.1;
+const COMPILING_OVERSHOOT = 1.1;
 
-const thinkingLayout = (
+const compilingLayout = (
   config: GridConfig,
   sphere: Vec3[],
   angle = 0,
@@ -278,14 +277,14 @@ const thinkingLayout = (
   return sphere.map((pt) => {
     const r = rotateY(pt, angle);
     return {
-      x: config.grid.center + r.x * config.grid.center * THINKING_OVERSHOOT,
-      y: config.grid.center + r.y * config.grid.center * THINKING_OVERSHOOT,
+      x: config.grid.center + r.x * config.grid.center * COMPILING_OVERSHOOT,
+      y: config.grid.center + r.y * config.grid.center * COMPILING_OVERSHOOT,
       z: baseZ * (0.5 + 0.6 * r.z),
     };
   });
 };
 
-const thinkingOpacities = (
+const compilingOpacities = (
   config: GridConfig,
   sphere: Vec3[],
   layoutAngle: number,
@@ -995,11 +994,11 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       sequenceDuration: PING_SEQ_DURATION,
       projConfig: dormantProj,
     },
-    thinking: {
-      label: STATE_META.thinking.label,
-      layout: (a = 0) => thinkingLayout(config, sphere, a),
+    compiling: {
+      label: STATE_META.compiling.label,
+      layout: (a = 0) => compilingLayout(config, sphere, a),
       opacities: (ctx) =>
-        thinkingOpacities(config, sphere, ctx.layoutAngle, ctx.opacityAngle),
+        compilingOpacities(config, sphere, ctx.layoutAngle, ctx.opacityAngle),
       animated: true,
       layoutSpeed: 2.5,
       opacitySpeed: 4,
