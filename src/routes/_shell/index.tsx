@@ -8,10 +8,15 @@ import DotIcon, {
 } from "#/components/DotIcon/DotIcon";
 import AIChat from "#/components/sequence/AIChat";
 import styles from "../../index.module.css";
+import { isDevStateEnabled } from "#/env";
 
 export const Route = createFileRoute("/_shell/")({
   component: () => {
-    const GRID_SIZE_OPTIONS = [3, 4, 5, 6, 7, 8] as const;
+    const defaultGridSizeOptions = [3, 4, 7];
+    const devGridSizeOptions = [3, 4, 5, 6, 7, 10, 14];
+    const GRID_SIZE_OPTIONS = isDevStateEnabled
+      ? devGridSizeOptions
+      : defaultGridSizeOptions;
     const [iconState, seticonState] = useState<StateKey>("dormant");
     const [gridSize, setGridSize] = useState(4);
     const [gridSizeInput, setGridSizeInput] = useState(gridSize);

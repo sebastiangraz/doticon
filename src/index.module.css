@@ -282,8 +282,8 @@
 }
 
 .gridValue {
-  min-width: 1.2em;
-  text-align: right;
+  min-width: 6ch;
+  text-align: center;
 }
 
 .toggle {
