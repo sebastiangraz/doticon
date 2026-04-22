@@ -178,8 +178,8 @@ const STATE_META = {
     label: "Compiling",
     usage: "Sphere motion, use for compiling, building, or “work in progress.”",
   },
-  processing: {
-    label: "Processing",
+  organizing: {
+    label: "Organizing",
     usage:
       "Rotating cube-style motion, use for sustained work or “running in the background.”",
   },
@@ -299,7 +299,7 @@ const compilingOpacities = (
     return clamp(wave * depth, 0, 1);
   });
 
-// Processing: 8 cube vertices first, then the same interior grid count on
+// Organizing: 8 cube vertices first, then the same interior grid count on
 // every face (uneven remainder skipped for the balanced pass). Extra dots use
 // unique surface positions (edge midpoints, then denser face grids) — no two
 // dots share the same quantized XYZ. Rotation is sequential — one axis ramps
@@ -317,7 +317,7 @@ const CUBE_CORNERS: readonly Vec3[] = [
 
 // (u,v) in open square (-1,1)² → 3D on each face; interior-only so dots are
 // unique across faces.
-const PROCESSING_FACE_MAP: readonly ((u: number, v: number) => Vec3)[] = [
+const FACE_MAP: readonly ((u: number, v: number) => Vec3)[] = [
   (u, v) => ({ x: u, y: v, z: 1 }),
   (u, v) => ({ x: u, y: v, z: -1 }),
   (u, v) => ({ x: 1, y: u, z: v }),
@@ -335,7 +335,7 @@ const CUBE_EDGE_MIDPOINTS: readonly Vec3[] = [
   { x: -1, y: -1, z: 0 }, { x: -1, y: 1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 },
 ];
 
-const processingVecKey = (p: Vec3): string =>
+const vecKey = (p: Vec3): string =>
   `${quantizeFloat(p.x)},${quantizeFloat(p.y)},${quantizeFloat(p.z)}`;
 
 /** Evenly spaced grid strictly inside (-1,1)², row-major. */
@@ -354,12 +354,12 @@ const interiorFaceGrid2D = (count: number): { u: number; v: number }[] => {
   return out;
 };
 
-const buildProcessingCubeBase = (dotCount: number): Vec3[] => {
+const buildOrganizingCubeBase = (dotCount: number): Vec3[] => {
   const out: Vec3[] = [];
   const used = new Set<string>();
 
   const tryPush = (p: Vec3): boolean => {
-    const key = processingVecKey(p);
+    const key = vecKey(p);
     if (used.has(key)) return false;
     used.add(key);
     out.push(p);
@@ -373,7 +373,7 @@ const buildProcessingCubeBase = (dotCount: number): Vec3[] => {
   const remaining = dotCount - 8;
   const k = Math.floor(remaining / 6);
   for (let f = 0; f < 6; f++) {
-    const map = PROCESSING_FACE_MAP[f]!;
+    const map = FACE_MAP[f]!;
     for (const { u, v } of interiorFaceGrid2D(k)) {
       tryPush(map(u, v));
     }
@@ -387,7 +387,7 @@ const buildProcessingCubeBase = (dotCount: number): Vec3[] => {
   let denom = 2;
   while (out.length < dotCount && denom < 512) {
     for (let f = 0; f < 6 && out.length < dotCount; f++) {
-      const map = PROCESSING_FACE_MAP[f]!;
+      const map = FACE_MAP[f]!;
       for (let r = 1; r <= denom && out.length < dotCount; r++) {
         for (let c = 1; c <= denom && out.length < dotCount; c++) {
           const u = -1 + (2 * c) / (denom + 1);
@@ -402,7 +402,7 @@ const buildProcessingCubeBase = (dotCount: number): Vec3[] => {
   return out;
 };
 
-const PROCESSING_SPIN = (() => {
+const RNG_SPIN = (() => {
   const rng = mulberry32(0x50_41_54_43);
   return {
     signX: rng() < 0.5 ? -1 : 1,
@@ -412,21 +412,19 @@ const PROCESSING_SPIN = (() => {
 })();
 
 /** Radians of layoutAngle for one axis ramp 0 → π/2 (linear). */
-const PROCESSING_SPIN_PHASE = 1.0;
+const SPIN_PHASE = 1.0;
 /** layoutAngle spent holding between ramps. */
-const PROCESSING_PAUSE_PHASE = 0.3;
-const PROCESSING_STEP = Math.PI / 2;
+const PAUSE_PHASE = 0.3;
+const STEP = Math.PI / 2;
 
-const processingAxisAngles = (
-  layoutAngle: number,
-): { ax: number; ay: number } => {
-  const S = PROCESSING_SPIN_PHASE;
-  const P = PROCESSING_PAUSE_PHASE;
+const axisAngles = (layoutAngle: number): { ax: number; ay: number } => {
+  const S = SPIN_PHASE;
+  const P = PAUSE_PHASE;
   const T = 2 * (S + P);
-  const step = PROCESSING_STEP;
-  const sx = PROCESSING_SPIN.signX;
-  const sy = PROCESSING_SPIN.signY;
-  const xFirst = PROCESSING_SPIN.firstAxisIsX;
+  const step = STEP;
+  const sx = RNG_SPIN.signX;
+  const sy = RNG_SPIN.signY;
+  const xFirst = RNG_SPIN.firstAxisIsX;
 
   const cycles = Math.floor(layoutAngle / T);
   const p = layoutAngle - cycles * T;
@@ -461,19 +459,19 @@ const processingAxisAngles = (
   };
 };
 
-const rotateProcessing = (p: Vec3, layoutAngle: number): Vec3 => {
-  const { ax, ay } = processingAxisAngles(layoutAngle);
+const rotateOrganizing = (p: Vec3, layoutAngle: number): Vec3 => {
+  const { ax, ay } = axisAngles(layoutAngle);
   return rotateY(rotateX(p, ax), ay);
 };
 
-const processingLayout = (
+const organizingLayout = (
   config: GridConfig,
   cube: Vec3[],
   layoutAngle = 0,
 ): Vec3[] => {
   const baseZ = gridBaseZ(config);
   return cube.map((pt) => {
-    const r = rotateProcessing(pt, layoutAngle);
+    const r = rotateOrganizing(pt, layoutAngle);
     return {
       x: config.grid.center + r.x * config.grid.center * 0.85,
       y: config.grid.center + r.y * config.grid.center * 0.85,
@@ -482,14 +480,14 @@ const processingLayout = (
   });
 };
 
-const processingOpacities = (
+const organizingOpacities = (
   config: GridConfig,
   cube: Vec3[],
   layoutAngle: number,
   opacityAngle: number,
 ): number[] =>
   Array.from({ length: config.dotCount }, (_, i) => {
-    const r = rotateProcessing(cube[i]!, layoutAngle);
+    const r = rotateOrganizing(cube[i]!, layoutAngle);
     const depth = (r.z + 1) / 1.5;
     const u = (i / config.dotCount + 0.5) % 1;
     const wave =
@@ -955,7 +953,7 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const hoverRanks = buildHoverRanks(dormantProj.n);
   const pingRingDists = buildPingRingDists(dormantProj);
   const sphere = buildSphereBase(config);
-  const processingCube = buildProcessingCubeBase(config.dotCount);
+  const organizingCube = buildOrganizingCubeBase(config.dotCount);
   const ranks = buildLoadingRanks(config);
   const errorData = buildErrorData(config);
   const indexingSeq = buildIndexingSequence(config);
@@ -1004,13 +1002,13 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       opacitySpeed: 4,
       projConfig: config,
     },
-    processing: {
-      label: STATE_META.processing.label,
-      layout: (a = 0) => processingLayout(config, processingCube, a),
+    organizing: {
+      label: STATE_META.organizing.label,
+      layout: (a = 0) => organizingLayout(config, organizingCube, a),
       opacities: (ctx) =>
-        processingOpacities(
+        organizingOpacities(
           config,
-          processingCube,
+          organizingCube,
           ctx.layoutAngle,
           ctx.opacityAngle,
         ),

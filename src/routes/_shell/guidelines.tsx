@@ -38,7 +38,7 @@ const GuidelinesPage = () => {
           <ExposeProps className={styles.prop} ignoreProps={["grid", "size"]}>
             <DotIcon size={24} state={"dormant"} grid={4} />
             <DotIcon size={24} state={"compiling"} grid={4} />
-            <DotIcon size={24} state={"processing"} grid={4} />
+            <DotIcon size={24} state={"organizing"} grid={4} />
           </ExposeProps>
         </li>
         <li>
