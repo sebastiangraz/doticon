@@ -1023,12 +1023,15 @@ const rotateThinkingAxis = (p: Vec3, angle: number): Vec3 => {
   };
 };
 
+// `baseZ` is driven by the user's original grid (not `thinkingProj`) so dot
+// sizes match the dev/other states at every grid size — e.g. n=3 keeps its
+// one-size-larger dots even though the cube renders into a 4×4 projection.
 const thinkingLayout = (
   config: GridConfig,
   cube: Vec3[],
-  angle = 0,
+  angle: number,
+  baseZ: number,
 ): Vec3[] => {
-  const baseZ = gridBaseZ(config);
   const cx = config.grid.center;
   const depthX = Math.cos(THINKING_CABINET_ANGLE) * THINKING_DEPTH_SCALE;
   const depthY = Math.sin(THINKING_CABINET_ANGLE) * THINKING_DEPTH_SCALE;
@@ -1086,6 +1089,7 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const thinkingVisible = thinkingDice16
     ? THINKING_DICE16_COUNT
     : THINKING_DICE5_COUNT;
+  const thinkingBaseZ = gridBaseZ(config);
   const ranks = buildLoadingRanks(config);
   const errorData = buildErrorData(config);
   const indexingSeq = buildIndexingSequence(config);
@@ -1151,7 +1155,8 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     },
     thinking: {
       label: STATE_META.thinking.label,
-      layout: (a = 0) => thinkingLayout(thinkingProj, thinkingCube, a),
+      layout: (a = 0) =>
+        thinkingLayout(thinkingProj, thinkingCube, a, thinkingBaseZ),
       opacities: (ctx) =>
         thinkingOpacities(
           thinkingProj,
