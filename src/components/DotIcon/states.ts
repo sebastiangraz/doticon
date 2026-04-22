@@ -967,13 +967,16 @@ const errorOpacities = (
 // screen's bottom-left to back-top-right at θ=π and returns at θ=2π.
 // Depth (z) and opacity are intentionally flat at this stage — layout-only.
 
-const THINKING_SPEED = 2; // radians / second
+const THINKING_SPEED = 1; // radians / second
 const THINKING_CABINET_ANGLE = Math.PI / 4;
 const THINKING_DEPTH_SCALE = 0.5; // classic cabinet foreshortening
 const THINKING_CUBE_SCALE = 0.7; // keeps the rotated cube inside the grid
-// Each face reads as the 5-pip side of a die: 4 shared corners + 1 face centre.
-// 8 corners + 6 face centres = 14 visible dots; extra slots are hidden.
-const THINKING_DICE_COUNT = 8 + 6;
+// Default: each face reads as the 5-pip side of a die — 4 shared corners + 1
+// face centre = 14 unique surface dots. The 7×7 grid (n=7) upgrades to a
+// projection with 64 slots so each face can render a 4×4 lattice — 56 unique
+// surface dots, giving a "theoretical 16-pip" die face.
+const THINKING_DICE5_COUNT = 8 + 6;
+const THINKING_DICE16_COUNT = 4 ** 3 - 2 ** 3;
 
 // 8 cube corners, then 6 face centres, then arbitrary padding slots. The
 // padding positions don't matter because the thinking state masks them to
@@ -988,11 +991,29 @@ const buildThinkingCubeBase = (dotCount: number): Vec3[] => {
   return out;
 };
 
+// 4-sample-per-axis cube surface: axes sample {−1, −1/3, 1/3, 1}. A point is on
+// the surface whenever at least one coordinate is ±1. Total unique dots =
+// 4³ − 2³ = 56, rendering each face as a 4×4 grid.
+const buildThinkingCubeDice16 = (dotCount: number): Vec3[] => {
+  const samples = [-1, -1 / 3, 1 / 3, 1];
+  const surface: Vec3[] = [];
+  for (const x of samples)
+    for (const y of samples)
+      for (const z of samples)
+        if (Math.abs(x) === 1 || Math.abs(y) === 1 || Math.abs(z) === 1)
+          surface.push({ x, y, z });
+  const out: Vec3[] = [];
+  for (let i = 0; i < surface.length && out.length < dotCount; i++)
+    out.push(surface[i]!);
+  while (out.length < dotCount) out.push({ x: 0, y: 0, z: 0 });
+  return out;
+};
+
 // Rodrigues rotation around (1, 1, 0)/√2, closed-form. Using positive `angle`
 // spins the front-bottom-left vertex toward the top-right diagonal first.
 const rotateThinkingAxis = (p: Vec3, angle: number): Vec3 => {
-  const c = Math.cos(-angle);
-  const s = Math.sin(-angle);
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
   const half = (1 - c) / 2;
   const k = s / Math.SQRT2;
   return {
@@ -1025,9 +1046,10 @@ const thinkingOpacities = (
   config: GridConfig,
   cube: Vec3[],
   layoutAngle: number,
+  visibleCount: number,
 ): number[] =>
   Array.from({ length: config.dotCount }, (_, i) => {
-    if (i >= THINKING_DICE_COUNT) return 0;
+    if (i >= visibleCount) return 0;
     const r = rotateThinkingAxis(cube[i]!, layoutAngle);
     return clamp((r.z + 1) / 2, 0, 1);
   });
@@ -1047,10 +1069,23 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const pingRingDists = buildPingRingDists(dormantProj);
   const sphere = buildSphereBase(config);
   const organizingCube = buildOrganizingCubeBase(config.dotCount);
-  // Thinking clamps 3×3 to a 4×4 projection (like dormant) so the cabinet
-  // projection has enough dots to read as a cube.
-  const thinkingProj = config.n === 3 ? buildGridConfig(4) : config;
-  const thinkingCube = buildThinkingCubeBase(thinkingProj.dotCount);
+  // Thinking clamps 3×3 → 4×4 (like dormant) so the cabinet projection has
+  // enough dots to read as a cube. n ≥ 7 renders a 4×4 lattice per face
+  // (56 unique surface dots); n = 7 specifically upgrades to an 8×8 projection
+  // since a native 7×7 (49 dots) can't hold all 56 surface points.
+  const thinkingProj =
+    config.n === 3
+      ? buildGridConfig(4)
+      : config.n === 7
+        ? buildGridConfig(8)
+        : config;
+  const thinkingDice16 = config.n >= 7;
+  const thinkingCube = thinkingDice16
+    ? buildThinkingCubeDice16(thinkingProj.dotCount)
+    : buildThinkingCubeBase(thinkingProj.dotCount);
+  const thinkingVisible = thinkingDice16
+    ? THINKING_DICE16_COUNT
+    : THINKING_DICE5_COUNT;
   const ranks = buildLoadingRanks(config);
   const errorData = buildErrorData(config);
   const indexingSeq = buildIndexingSequence(config);
@@ -1118,7 +1153,12 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       label: STATE_META.thinking.label,
       layout: (a = 0) => thinkingLayout(thinkingProj, thinkingCube, a),
       opacities: (ctx) =>
-        thinkingOpacities(thinkingProj, thinkingCube, ctx.layoutAngle),
+        thinkingOpacities(
+          thinkingProj,
+          thinkingCube,
+          ctx.layoutAngle,
+          thinkingVisible,
+        ),
       animated: true,
       layoutSpeed: THINKING_SPEED,
       projConfig: thinkingProj,
