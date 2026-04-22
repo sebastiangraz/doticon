@@ -183,6 +183,11 @@ const STATE_META = {
     usage:
       "Rotating cube-style motion, use for sustained work or “running in the background.”",
   },
+  thinking: {
+    label: "Thinking",
+    usage:
+      "Cube rotating in 45° cabinet projection, use for reasoning, planning, or “AI is thinking.”",
+  },
   loading: {
     label: "Loading",
     usage: "Column fill sweep, use for determinate or indeterminate progress.",
@@ -939,6 +944,57 @@ const errorOpacities = (
   });
 };
 
+// ─── Thinking ───────────────────────────────────────────────────────────────────
+// Cube rendered in a 45° cabinet projection, rotating continuously in 3D.
+// Rotation axis is world-space (1, 1, 0)/√2 — the unique axis (given a 45°
+// cabinet) under which every dot's screen-space velocity stays locked to the
+// cabinet diagonal. Consequence: front/back face pairs always slide along
+// parallel diagonals, never crossing through each other in Z. The cube reads
+// as a cabinet drawing throughout the entire loop instead of drifting into
+// free perspective tumbling after the first quarter turn.
+//
+// Front-bottom-left vertex (−1, +1, −1 in SVG y-down space) travels from the
+// screen's bottom-left to back-top-right at θ=π and returns at θ=2π.
+// Depth (z) and opacity are intentionally flat at this stage — layout-only.
+
+const THINKING_SPEED = 0.9; // radians / second
+const THINKING_CABINET_ANGLE = Math.PI / 4;
+const THINKING_DEPTH_SCALE = 0.5; // classic cabinet foreshortening
+const THINKING_CUBE_SCALE = 0.55; // keeps the rotated cube inside the grid
+
+// Rodrigues rotation around (1, 1, 0)/√2, closed-form. Using positive `angle`
+// spins the front-bottom-left vertex toward the top-right diagonal first.
+const rotateThinkingAxis = (p: Vec3, angle: number): Vec3 => {
+  const c = Math.cos(-angle);
+  const s = Math.sin(-angle);
+  const half = (1 - c) / 2;
+  const k = s / Math.SQRT2;
+  return {
+    x: p.x * (1 - half) + p.y * half + p.z * k,
+    y: p.x * half + p.y * (1 - half) - p.z * k,
+    z: -p.x * k + p.y * k + p.z * c,
+  };
+};
+
+const thinkingLayout = (
+  config: GridConfig,
+  cube: Vec3[],
+  angle = 0,
+): Vec3[] => {
+  const baseZ = gridBaseZ(config);
+  const cx = config.grid.center;
+  const depthX = Math.cos(THINKING_CABINET_ANGLE) * THINKING_DEPTH_SCALE;
+  const depthY = Math.sin(THINKING_CABINET_ANGLE) * THINKING_DEPTH_SCALE;
+  return cube.map((pt) => {
+    const r = rotateThinkingAxis(pt, angle);
+    return {
+      x: cx + (r.x + r.z * depthX) * cx * THINKING_CUBE_SCALE,
+      y: cx + (r.y - r.z * depthY) * cx * THINKING_CUBE_SCALE,
+      z: baseZ,
+    };
+  });
+};
+
 // ─── Build ──────────────────────────────────────────────────────────────────────
 
 export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
@@ -954,6 +1010,8 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const pingRingDists = buildPingRingDists(dormantProj);
   const sphere = buildSphereBase(config);
   const organizingCube = buildOrganizingCubeBase(config.dotCount);
+  const thinkingProj = config.n === 3 ? buildGridConfig(4) : config;
+  const thinkingCube = buildOrganizingCubeBase(thinkingProj.dotCount);
   const ranks = buildLoadingRanks(config);
   const errorData = buildErrorData(config);
   const indexingSeq = buildIndexingSequence(config);
@@ -1016,6 +1074,14 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       layoutSpeed: 2.5,
       opacitySpeed: 4,
       projConfig: config,
+    },
+    thinking: {
+      label: STATE_META.thinking.label,
+      layout: (a = 0) => thinkingLayout(thinkingProj, thinkingCube, a),
+      opacities: Array.from({ length: thinkingProj.dotCount }, () => 1),
+      animated: true,
+      layoutSpeed: THINKING_SPEED,
+      projConfig: thinkingProj,
     },
     loading: {
       label: STATE_META.loading.label,
