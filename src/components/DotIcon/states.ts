@@ -169,6 +169,11 @@ const STATE_META = {
     usage:
       "Animated accent on the dormant layout, use for interactive hover feedback.",
   },
+  ping: {
+    label: "Ping",
+    usage:
+      "One-shot ripple outward from center, use to attract attention or signal a notification.",
+  },
   thinking: {
     label: "Thinking",
     usage:
@@ -196,11 +201,6 @@ const STATE_META = {
     label: "Indexing",
     usage:
       "Randomized scanning sequence, use while indexing, searching, or ingesting files.",
-  },
-  ping: {
-    label: "Ping",
-    usage:
-      "One-shot ripple outward from center, use to attract attention or signal a notification.",
   },
   dev: {
     label: "Dev",

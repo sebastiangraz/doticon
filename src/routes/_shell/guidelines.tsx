@@ -100,8 +100,8 @@ const GuidelinesPage = () => {
         <li>
           Avoid changing icon state by replacing it with a new component
           instance. This will reset the animation phase and cause a jarring
-          transition. For smooth transitions modify the <code>state</code> prop
-          directly.
+          transition. For smooth transitions between two states, modify the{" "}
+          <code>state</code> prop directly.
         </li>
         <li>
           Do not render more than <strong>10</strong> animated instances on the
@@ -118,8 +118,8 @@ const GuidelinesPage = () => {
 
       <h1>Types & Helpers</h1>
       <p>
-        Use the exported types and helpers — StateKey, STATE_KEYS,
-        getStateLabel, getStateUsage — when building menus, tests, or
+        Use the exported types and helpers — `StateKey`, `STATE_KEYS`,
+        `getStateLabel`, `getStateUsage` — when building menus, tests, or
         documentation that list states in one place.
       </p>
     </main>

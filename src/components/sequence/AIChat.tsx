@@ -49,7 +49,7 @@ const bubbleTransition = {
   ease: "easeOut",
 } as const;
 
-const HIDDEN = { opacity: 0, y: 6, scale: 0.98 };
+const HIDDEN = { opacity: 0, y: 6, scale: 0.99 };
 const SHOWN = { opacity: 1, y: 0, scale: 1 };
 
 const AIChat = () => {
