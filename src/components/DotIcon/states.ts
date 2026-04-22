@@ -186,7 +186,7 @@ const STATE_META = {
   thinking: {
     label: "Thinking",
     usage:
-      "Cube rotating in 45° cabinet projection, use for reasoning, planning, or “AI is thinking.”",
+      "Sequential grid fill, use for reasoning, planning, or “AI is thinking.”",
   },
   loading: {
     label: "Loading",
@@ -340,15 +340,6 @@ const CUBE_EDGE_MIDPOINTS: readonly Vec3[] = [
   { x: -1, y: -1, z: 0 }, { x: -1, y: 1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 },
 ];
 
-// Centres of the 6 cube faces (one coordinate ±1, other two 0).
-const CUBE_FACE_CENTERS: readonly Vec3[] = [
-  { x: 0, y: 0, z: 1 },
-  { x: 0, y: 0, z: -1 },
-  { x: 1, y: 0, z: 0 },
-  { x: -1, y: 0, z: 0 },
-  { x: 0, y: 1, z: 0 },
-  { x: 0, y: -1, z: 0 },
-];
 
 const vecKey = (p: Vec3): string =>
   `${quantizeFloat(p.x)},${quantizeFloat(p.y)},${quantizeFloat(p.z)}`;
@@ -955,107 +946,108 @@ const errorOpacities = (
 };
 
 // ─── Thinking ───────────────────────────────────────────────────────────────────
-// Cube rendered in a 45° cabinet projection, rotating continuously in 3D.
-// Rotation axis is world-space (1, 1, 0)/√2 — the unique axis (given a 45°
-// cabinet) under which every dot's screen-space velocity stays locked to the
-// cabinet diagonal. Consequence: front/back face pairs always slide along
-// parallel diagonals, never crossing through each other in Z. The cube reads
-// as a cabinet drawing throughout the entire loop instead of drifting into
-// free perspective tumbling after the first quarter turn.
-//
-// Front-bottom-left vertex (−1, +1, −1 in SVG y-down space) travels from the
-// screen's bottom-left to back-top-right at θ=π and returns at θ=2π.
-// Depth (z) and opacity are intentionally flat at this stage — layout-only.
+// Block-fill animation: the grid is packed from the bottom up with 1×1, 1×3,
+// and 2×2 pieces placed in randomised column order — evoking a defragmentation
+// process or automated tetris pieces settling. Each piece's dots light up
+// simultaneously; the overall fill progresses row-by-row upward.
 
-const THINKING_SPEED = 1; // radians / second
-const THINKING_CABINET_ANGLE = Math.PI / 4;
-const THINKING_DEPTH_SCALE = 0.5; // classic cabinet foreshortening
-const THINKING_CUBE_SCALE = 0.7; // keeps the rotated cube inside the grid
-// Default: each face reads as the 5-pip side of a die — 4 shared corners + 1
-// face centre = 14 unique surface dots. The 7×7 grid (n=7) upgrades to a
-// projection with 64 slots so each face can render a 4×4 lattice — 56 unique
-// surface dots, giving a "theoretical 16-pip" die face.
-const THINKING_DICE5_COUNT = 8 + 6;
-const THINKING_DICE16_COUNT = 4 ** 3 - 2 ** 3;
+const THINKING_SPEED = 18; // dot-units revealed per second
+const THINKING_PAUSE = 24; // angle units to hold after full fill (~1.3 s)
+const THINKING_SEED = 0xde7fac;
 
-// 8 cube corners, then 6 face centres, then arbitrary padding slots. The
-// padding positions don't matter because the thinking state masks them to
-// opacity 0 — keeping the dot array length aligned with `dotCount` so the
-// crossfade into/out of the state stays stable.
-const buildThinkingCubeBase = (dotCount: number): Vec3[] => {
-  const out: Vec3[] = [];
-  for (let i = 0; i < Math.min(8, dotCount); i++) out.push(CUBE_CORNERS[i]!);
-  for (let i = 0; i < 6 && out.length < dotCount; i++)
-    out.push(CUBE_FACE_CENTERS[i]!);
-  while (out.length < dotCount) out.push({ x: 0, y: 0, z: 0 });
-  return out;
+const buildThinkingFillOrder = (config: GridConfig): number[] => {
+  const { n, dotCount } = config;
+  const thresholds = new Array<number>(dotCount).fill(dotCount);
+  const filled = new Array<boolean>(dotCount).fill(false);
+  const rng = mulberry32(THINKING_SEED + n * 137);
+
+  const inBounds = (x: number, y: number): boolean =>
+    x >= 0 && x < n && y >= 0 && y < n;
+  const ci = (x: number, y: number): number => y * n + x;
+  const free = (x: number, y: number): boolean =>
+    inBounds(x, y) && !filled[ci(x, y)];
+
+  type Cell = { x: number; y: number };
+  const allFree = (cells: Cell[]): boolean => cells.every((c) => free(c.x, c.y));
+
+  let claimed = 0;
+
+  for (let y = n - 1; y >= 0; y--) {
+    // Shuffle column order so pieces land in unpredictable positions
+    const xs = Array.from({ length: n }, (_, i) => i);
+    for (let i = xs.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [xs[i], xs[j]] = [xs[j]!, xs[i]!];
+    }
+
+    for (const x of xs) {
+      if (!free(x, y)) continue;
+
+      const candidates: { cells: Cell[]; weight: number }[] = [
+        { cells: [{ x, y }], weight: 1 }, // 1×1 always available
+      ];
+
+      // 1×3 horizontal — try all three orientations that include (x, y)
+      for (const dx of [0, -1, -2]) {
+        const cells: Cell[] = [
+          { x: x + dx, y },
+          { x: x + dx + 1, y },
+          { x: x + dx + 2, y },
+        ];
+        if (allFree(cells)) candidates.push({ cells, weight: 3 });
+      }
+
+      // 3×1 vertical — extend upward from (x, y)
+      const vCells: Cell[] = [{ x, y }, { x, y: y - 1 }, { x, y: y - 2 }];
+      if (allFree(vCells)) candidates.push({ cells: vCells, weight: 3 });
+
+      // 2×2 — two horizontal anchor positions that include (x, y)
+      for (const dx of [0, -1]) {
+        const cells: Cell[] = [
+          { x: x + dx, y },
+          { x: x + dx + 1, y },
+          { x: x + dx, y: y - 1 },
+          { x: x + dx + 1, y: y - 1 },
+        ];
+        if (allFree(cells)) candidates.push({ cells, weight: 5 });
+      }
+
+      // Weighted random pick — larger pieces are preferred
+      const total = candidates.reduce((s, c) => s + c.weight, 0);
+      let r = rng() * total;
+      let chosen = candidates[0]!;
+      for (const c of candidates) {
+        r -= c.weight;
+        if (r <= 0) {
+          chosen = c;
+          break;
+        }
+      }
+
+      const threshold = claimed;
+      for (const cell of chosen.cells) {
+        filled[ci(cell.x, cell.y)] = true;
+        thresholds[ci(cell.x, cell.y)] = threshold;
+      }
+      claimed += chosen.cells.length;
+    }
+  }
+
+  return thresholds;
 };
 
-// 4-sample-per-axis cube surface: axes sample {−1, −1/3, 1/3, 1}. A point is on
-// the surface whenever at least one coordinate is ±1. Total unique dots =
-// 4³ − 2³ = 56, rendering each face as a 4×4 grid.
-const buildThinkingCubeDice16 = (dotCount: number): Vec3[] => {
-  const samples = [-1, -1 / 3, 1 / 3, 1];
-  const surface: Vec3[] = [];
-  for (const x of samples)
-    for (const y of samples)
-      for (const z of samples)
-        if (Math.abs(x) === 1 || Math.abs(y) === 1 || Math.abs(z) === 1)
-          surface.push({ x, y, z });
-  const out: Vec3[] = [];
-  for (let i = 0; i < surface.length && out.length < dotCount; i++)
-    out.push(surface[i]!);
-  while (out.length < dotCount) out.push({ x: 0, y: 0, z: 0 });
-  return out;
-};
-
-// Rodrigues rotation around (1, 1, 0)/√2, closed-form. Using positive `angle`
-// spins the front-bottom-left vertex toward the top-right diagonal first.
-const rotateThinkingAxis = (p: Vec3, angle: number): Vec3 => {
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-  const half = (1 - c) / 2;
-  const k = s / Math.SQRT2;
-  return {
-    x: p.x * (1 - half) + p.y * half + p.z * k,
-    y: p.x * half + p.y * (1 - half) - p.z * k,
-    z: -p.x * k + p.y * k + p.z * c,
-  };
-};
-
-// `baseZ` is driven by the user's original grid (not `thinkingProj`) so dot
-// sizes match the dev/other states at every grid size — e.g. n=3 keeps its
-// one-size-larger dots even though the cube renders into a 4×4 projection.
-const thinkingLayout = (
+const thinkingFillOpacities = (
   config: GridConfig,
-  cube: Vec3[],
+  fillOrder: number[],
   angle: number,
-  baseZ: number,
-): Vec3[] => {
-  const cx = config.grid.center;
-  const depthX = Math.cos(THINKING_CABINET_ANGLE) * THINKING_DEPTH_SCALE;
-  const depthY = Math.sin(THINKING_CABINET_ANGLE) * THINKING_DEPTH_SCALE;
-  return cube.map((pt) => {
-    const r = rotateThinkingAxis(pt, angle);
-    return {
-      x: cx + (r.x + r.z * depthX) * cx * THINKING_CUBE_SCALE,
-      y: cx + (r.y - r.z * depthY) * cx * THINKING_CUBE_SCALE,
-      z: baseZ * (0.5 + 0.6 * r.z),
-    };
-  });
+): number[] => {
+  const { dotCount } = config;
+  const cycle = dotCount + THINKING_PAUSE;
+  const raw = ((angle % cycle) + cycle) % cycle;
+  return Array.from({ length: dotCount }, (_, i) =>
+    fillOrder[i]! < raw ? 1 : 0.12,
+  );
 };
-
-const thinkingOpacities = (
-  config: GridConfig,
-  cube: Vec3[],
-  layoutAngle: number,
-  visibleCount: number,
-): number[] =>
-  Array.from({ length: config.dotCount }, (_, i) => {
-    if (i >= visibleCount) return 0;
-    const r = rotateThinkingAxis(cube[i]!, layoutAngle);
-    return clamp(0.5 + r.z * 1.5 - 0.3, 0, 1);
-  });
 
 // ─── Build ──────────────────────────────────────────────────────────────────────
 
@@ -1072,24 +1064,7 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const pingRingDists = buildPingRingDists(dormantProj);
   const sphere = buildSphereBase(config);
   const organizingCube = buildOrganizingCubeBase(config.dotCount);
-  // Thinking clamps 3×3 → 4×4 (like dormant) so the cabinet projection has
-  // enough dots to read as a cube. n ≥ 7 renders a 4×4 lattice per face
-  // (56 unique surface dots); n = 7 specifically upgrades to an 8×8 projection
-  // since a native 7×7 (49 dots) can't hold all 56 surface points.
-  const thinkingProj =
-    config.n === 3
-      ? buildGridConfig(4)
-      : config.n === 7
-        ? buildGridConfig(8)
-        : config;
-  const thinkingDice16 = config.n >= 7;
-  const thinkingCube = thinkingDice16
-    ? buildThinkingCubeDice16(thinkingProj.dotCount)
-    : buildThinkingCubeBase(thinkingProj.dotCount);
-  const thinkingVisible = thinkingDice16
-    ? THINKING_DICE16_COUNT
-    : THINKING_DICE5_COUNT;
-  const thinkingBaseZ = gridBaseZ(config);
+  const thinkingFillOrder = buildThinkingFillOrder(config);
   const ranks = buildLoadingRanks(config);
   const errorData = buildErrorData(config);
   const indexingSeq = buildIndexingSequence(config);
@@ -1155,18 +1130,12 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     },
     thinking: {
       label: STATE_META.thinking.label,
-      layout: (a = 0) =>
-        thinkingLayout(thinkingProj, thinkingCube, a, thinkingBaseZ),
+      layout: () => flatGrid(config, null),
       opacities: (ctx) =>
-        thinkingOpacities(
-          thinkingProj,
-          thinkingCube,
-          ctx.layoutAngle,
-          thinkingVisible,
-        ),
+        thinkingFillOpacities(config, thinkingFillOrder, ctx.opacityAngle),
       animated: true,
-      layoutSpeed: THINKING_SPEED,
-      projConfig: thinkingProj,
+      opacitySpeed: THINKING_SPEED,
+      projConfig: config,
     },
     loading: {
       label: STATE_META.loading.label,
