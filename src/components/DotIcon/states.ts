@@ -8,7 +8,6 @@ import {
   rotateY,
   lerp,
   clamp,
-  quantizeFloat,
 } from "./math";
 
 // ─── Dormant patterns ───────────────────────────────────────────────────────────
@@ -304,11 +303,68 @@ const compilingOpacities = (
     return clamp(wave * depth, 0, 1);
   });
 
-// Organizing: 8 cube vertices first, then the same interior grid count on
-// every face (uneven remainder skipped for the balanced pass). Extra dots use
-// unique surface positions (edge midpoints, then denser face grids) — no two
-// dots share the same quantized XYZ. Rotation is sequential — one axis ramps
-// π/2, hold, other axis ramps π/2, hold — in layoutAngle space (no blend).
+// Organizing: cube surface built from a k-sample-per-axis grid. A point is on
+// the surface whenever at least one coordinate equals ±1. Unique surface count =
+// k³ − (k−2)³. The die-5 pattern (5 per face) is a special case: 8 corners +
+// 6 face centres. Per-face dot counts are hardcoded per grid size so each size
+// can be tuned independently. Rotation is sequential — one axis ramps π/2, hold,
+// other axis ramps π/2, hold — in layoutAngle space (no blend).
+
+/**
+ * Hardcoded dots-per-face for the Organizing cube at each canonical grid size.
+ *   5  → die-5 (4 corners + 1 face centre per face)
+ *   N² → N×N regular grid per face (4, 9, 16, 25 …)
+ * Grid sizes not listed fall back to ORGANIZING_FACE_DOTS_DEFAULT.
+ */
+const ORGANIZING_FACE_DOTS: Readonly<Partial<Record<number, number>>> = {
+  3: 4, // 2×2 grid per face → 8 unique surface dots
+  4: 5, // die-5 (corners + face centres) → 14 unique surface dots
+  5: 12,
+  7: 16, // 4×4 grid per face → 56 unique surface dots (fits the 8×8 proj's 64 slots)
+};
+const ORGANIZING_FACE_DOTS_DEFAULT = 5;
+
+// The 6 canonical face projections: (u, v) ∈ [−1, 1]² → surface point.
+const CUBE_FACE_FNS: ReadonlyArray<(u: number, v: number) => Vec3> = [
+  (u, v) => ({ x: 1, y: u, z: v }),
+  (u, v) => ({ x: -1, y: u, z: v }),
+  (u, v) => ({ x: u, y: 1, z: v }),
+  (u, v) => ({ x: u, y: -1, z: v }),
+  (u, v) => ({ x: u, y: v, z: 1 }),
+  (u, v) => ({ x: u, y: v, z: -1 }),
+];
+
+/**
+ * k-sample-per-axis cube surface. Unique surface count = k³ − (k−2)³.
+ * Points are added in face-interleaved order (one point per face per round)
+ * so all 6 faces are represented even when dotCount < total unique surface.
+ */
+const buildOrganizingCubeSurface = (k: number, dotCount: number): Vec3[] => {
+  const samples = Array.from({ length: k }, (_, i) =>
+    k > 1 ? -1 + (2 * i) / (k - 1) : 0,
+  );
+  // k×k point grid per face, row-major.
+  const faceGrids = CUBE_FACE_FNS.map((fn) =>
+    samples.flatMap((u) => samples.map((v) => fn(u, v))),
+  );
+  const used = new Set<string>();
+  const key = (p: Vec3) => `${p.x},${p.y},${p.z}`;
+  const out: Vec3[] = [];
+  // Round-robin across faces so each face contributes equally when truncated.
+  for (let i = 0; i < k * k && out.length < dotCount; i++) {
+    for (let f = 0; f < 6 && out.length < dotCount; f++) {
+      const p = faceGrids[f]![i]!;
+      const k = key(p);
+      if (!used.has(k)) {
+        used.add(k);
+        out.push(p);
+      }
+    }
+  }
+  while (out.length < dotCount) out.push({ x: 0, y: 0, z: 0 });
+  return out;
+};
+
 const CUBE_CORNERS: readonly Vec3[] = [
   { x: -1, y: -1, z: -1 },
   { x: 1, y: -1, z: -1 },
@@ -320,26 +376,6 @@ const CUBE_CORNERS: readonly Vec3[] = [
   { x: 1, y: 1, z: 1 },
 ];
 
-// (u,v) in open square (-1,1)² → 3D on each face; interior-only so dots are
-// unique across faces.
-const FACE_MAP: readonly ((u: number, v: number) => Vec3)[] = [
-  (u, v) => ({ x: u, y: v, z: 1 }),
-  (u, v) => ({ x: u, y: v, z: -1 }),
-  (u, v) => ({ x: 1, y: u, z: v }),
-  (u, v) => ({ x: -1, y: u, z: v }),
-  (u, v) => ({ x: u, y: 1, z: v }),
-  (u, v) => ({ x: u, y: -1, z: v }),
-];
-
-// Midpoints of the 12 edges (exactly one coordinate 0, two are ±1). They do
-// not lie in the open face interiors used by interiorFaceGrid2D.
-// prettier-ignore
-const CUBE_EDGE_MIDPOINTS: readonly Vec3[] = [
-  { x: 0, y: -1, z: -1 }, { x: 0, y: -1, z: 1 }, { x: 0, y: 1, z: -1 }, { x: 0, y: 1, z: 1 },
-  { x: -1, y: 0, z: -1 }, { x: -1, y: 0, z: 1 }, { x: 1, y: 0, z: -1 }, { x: 1, y: 0, z: 1 },
-  { x: -1, y: -1, z: 0 }, { x: -1, y: 1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 },
-];
-
 // Centres of the 6 cube faces (one coordinate ±1, other two 0).
 const CUBE_FACE_CENTERS: readonly Vec3[] = [
   { x: 0, y: 0, z: 1 },
@@ -349,73 +385,6 @@ const CUBE_FACE_CENTERS: readonly Vec3[] = [
   { x: 0, y: 1, z: 0 },
   { x: 0, y: -1, z: 0 },
 ];
-
-const vecKey = (p: Vec3): string =>
-  `${quantizeFloat(p.x)},${quantizeFloat(p.y)},${quantizeFloat(p.z)}`;
-
-/** Evenly spaced grid strictly inside (-1,1)², row-major. */
-const interiorFaceGrid2D = (count: number): { u: number; v: number }[] => {
-  if (count <= 0) return [];
-  const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
-  const rows = Math.ceil(count / cols);
-  const out: { u: number; v: number }[] = [];
-  for (let r = 0; r < rows && out.length < count; r++) {
-    for (let c = 0; c < cols && out.length < count; c++) {
-      const u = -1 + (2 * (c + 1)) / (cols + 1);
-      const v = -1 + (2 * (r + 1)) / (rows + 1);
-      out.push({ u, v });
-    }
-  }
-  return out;
-};
-
-const buildOrganizingCubeBase = (dotCount: number): Vec3[] => {
-  const out: Vec3[] = [];
-  const used = new Set<string>();
-
-  const tryPush = (p: Vec3): boolean => {
-    const key = vecKey(p);
-    if (used.has(key)) return false;
-    used.add(key);
-    out.push(p);
-    return true;
-  };
-
-  const nCorner = Math.min(8, dotCount);
-  for (let i = 0; i < nCorner; i++) tryPush(CUBE_CORNERS[i]!);
-  if (out.length >= dotCount) return out;
-
-  const remaining = dotCount - 8;
-  const k = Math.floor(remaining / 6);
-  for (let f = 0; f < 6; f++) {
-    const map = FACE_MAP[f]!;
-    for (const { u, v } of interiorFaceGrid2D(k)) {
-      tryPush(map(u, v));
-    }
-  }
-
-  for (const p of CUBE_EDGE_MIDPOINTS) {
-    if (out.length >= dotCount) break;
-    tryPush(p);
-  }
-
-  let denom = 2;
-  while (out.length < dotCount && denom < 512) {
-    for (let f = 0; f < 6 && out.length < dotCount; f++) {
-      const map = FACE_MAP[f]!;
-      for (let r = 1; r <= denom && out.length < dotCount; r++) {
-        for (let c = 1; c <= denom && out.length < dotCount; c++) {
-          const u = -1 + (2 * c) / (denom + 1);
-          const v = -1 + (2 * r) / (denom + 1);
-          tryPush(map(u, v));
-        }
-      }
-    }
-    denom++;
-  }
-
-  return out;
-};
 
 const RNG_SPIN = (() => {
   const rng = mulberry32(0x50_41_54_43);
@@ -483,9 +452,9 @@ const organizingLayout = (
   config: GridConfig,
   cube: Vec3[],
   layoutAngle = 0,
-): Vec3[] => {
-  const baseZ = gridBaseZ(config);
-  return cube.map((pt) => {
+  baseZ: number,
+): Vec3[] =>
+  cube.map((pt) => {
     const r = rotateOrganizing(pt, layoutAngle);
     return {
       x: config.grid.center + r.x * config.grid.center * 0.85,
@@ -493,21 +462,17 @@ const organizingLayout = (
       z: baseZ * (0.5 + 0.6 * r.z),
     };
   });
-};
 
 const organizingOpacities = (
   config: GridConfig,
   cube: Vec3[],
   layoutAngle: number,
-  opacityAngle: number,
+  visibleCount: number,
 ): number[] =>
   Array.from({ length: config.dotCount }, (_, i) => {
+    if (i >= visibleCount) return 0;
     const r = rotateOrganizing(cube[i]!, layoutAngle);
-    const depth = (r.z + 1) / 1.5;
-    const u = (i / config.dotCount + 0.5) % 1;
-    const wave =
-      0.12 + 0.88 * (0.5 + 0.5 * Math.sin(2 * Math.PI * u + opacityAngle));
-    return clamp(wave * depth, 0, 1);
+    return clamp(0.5 + r.z * 0.9, 0, 1);
   });
 
 // Loading: column-major fill order + trail.
@@ -1071,7 +1036,34 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const hoverRanks = buildHoverRanks(dormantProj.n);
   const pingRingDists = buildPingRingDists(dormantProj);
   const sphere = buildSphereBase(config);
-  const organizingCube = buildOrganizingCubeBase(config.dotCount);
+  // Organizing: same proj bumping as Thinking so the cube reads cleanly at every
+  // grid size. Cube geometry and visibility masking borrowed from Thinking for
+  // correct back-face culling on intersecting faces.
+  let organizingProj =
+    config.n === 3
+      ? buildGridConfig(4)
+      : config.n === 7
+        ? buildGridConfig(8)
+        : config;
+  const organizingFaceDots =
+    ORGANIZING_FACE_DOTS[config.n] ?? ORGANIZING_FACE_DOTS_DEFAULT;
+  let organizingCube: Vec3[];
+  let organizingVisible: number;
+  if (organizingFaceDots === 5) {
+    organizingCube = buildThinkingCubeBase(organizingProj.dotCount);
+    organizingVisible = Math.min(THINKING_DICE5_COUNT, organizingProj.dotCount);
+  } else {
+    const k = Math.round(Math.sqrt(organizingFaceDots));
+    const uniqueSurface = k ** 3 - Math.max(0, k - 2) ** 3;
+    // Bump the proj up until it can hold all unique surface points so no face
+    // ends up with a missing dot due to a slot-count off-by-one.
+    while (organizingProj.dotCount < uniqueSurface) {
+      organizingProj = buildGridConfig(organizingProj.n + 1);
+    }
+    organizingCube = buildOrganizingCubeSurface(k, organizingProj.dotCount);
+    organizingVisible = uniqueSurface;
+  }
+  const organizingBaseZ = gridBaseZ(config);
   // Thinking clamps 3×3 → 4×4 (like dormant) so the cabinet projection has
   // enough dots to read as a cube. n ≥ 7 renders a 4×4 lattice per face
   // (56 unique surface dots); n = 7 specifically upgrades to an 8×8 projection
@@ -1140,18 +1132,18 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     },
     organizing: {
       label: STATE_META.organizing.label,
-      layout: (a = 0) => organizingLayout(config, organizingCube, a),
+      layout: (a = 0) =>
+        organizingLayout(organizingProj, organizingCube, a, organizingBaseZ),
       opacities: (ctx) =>
         organizingOpacities(
-          config,
+          organizingProj,
           organizingCube,
           ctx.layoutAngle,
-          ctx.opacityAngle,
+          organizingVisible,
         ),
       animated: true,
       layoutSpeed: 2.5,
-      opacitySpeed: 4,
-      projConfig: config,
+      projConfig: organizingProj,
     },
     thinking: {
       label: STATE_META.thinking.label,
