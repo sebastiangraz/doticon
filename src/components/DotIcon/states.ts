@@ -320,6 +320,7 @@ const ORGANIZING_FACE_DOTS: Readonly<Partial<Record<number, number>>> = {
   3: 4, // 2×2 grid per face → 8 unique surface dots
   4: 5, // die-5 (corners + face centres) → 14 unique surface dots
   5: 12,
+  6: 12,
   7: 16, // 4×4 grid per face → 56 unique surface dots (fits the 8×8 proj's 64 slots)
 };
 const ORGANIZING_FACE_DOTS_DEFAULT = 5;
@@ -1024,6 +1025,20 @@ const thinkingOpacities = (
 
 // ─── Build ──────────────────────────────────────────────────────────────────────
 
+/** 3×3 → 4×4, 7×7 → 8×8 so cube projections have enough dot slots. */
+const cubeProj = (config: GridConfig): GridConfig =>
+  config.n === 3
+    ? buildGridConfig(4)
+    : config.n === 7
+      ? buildGridConfig(8)
+      : config;
+
+/** Bump a GridConfig until it holds at least `minDots` slots. */
+const ensureSlots = (proj: GridConfig, minDots: number): GridConfig =>
+  proj.dotCount >= minDots
+    ? proj
+    : buildGridConfig(Math.ceil(Math.sqrt(minDots)));
+
 export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const dormantProj = config.n === 3 ? buildGridConfig(4) : config;
   const dormantZ =
@@ -1036,44 +1051,22 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const hoverRanks = buildHoverRanks(dormantProj.n);
   const pingRingDists = buildPingRingDists(dormantProj);
   const sphere = buildSphereBase(config);
-  // Organizing: same proj bumping as Thinking so the cube reads cleanly at every
-  // grid size. Cube geometry and visibility masking borrowed from Thinking for
-  // correct back-face culling on intersecting faces.
-  let organizingProj =
-    config.n === 3
-      ? buildGridConfig(4)
-      : config.n === 7
-        ? buildGridConfig(8)
-        : config;
+  // Organizing: cube with face-density control. Dice-5 reuses Thinking's
+  // corner+center geometry; larger face counts use the k×k surface builder.
   const organizingFaceDots =
     ORGANIZING_FACE_DOTS[config.n] ?? ORGANIZING_FACE_DOTS_DEFAULT;
-  let organizingCube: Vec3[];
-  let organizingVisible: number;
-  if (organizingFaceDots === 5) {
-    organizingCube = buildThinkingCubeBase(organizingProj.dotCount);
-    organizingVisible = Math.min(THINKING_DICE5_COUNT, organizingProj.dotCount);
-  } else {
-    const k = Math.round(Math.sqrt(organizingFaceDots));
-    const uniqueSurface = k ** 3 - Math.max(0, k - 2) ** 3;
-    // Bump the proj up until it can hold all unique surface points so no face
-    // ends up with a missing dot due to a slot-count off-by-one.
-    while (organizingProj.dotCount < uniqueSurface) {
-      organizingProj = buildGridConfig(organizingProj.n + 1);
-    }
-    organizingCube = buildOrganizingCubeSurface(k, organizingProj.dotCount);
-    organizingVisible = uniqueSurface;
-  }
+  const orgDice5 = organizingFaceDots === 5;
+  const orgK = orgDice5 ? 0 : Math.round(Math.sqrt(organizingFaceDots));
+  const orgUnique = orgDice5
+    ? THINKING_DICE5_COUNT
+    : orgK ** 3 - Math.max(0, orgK - 2) ** 3;
+  const organizingProj = ensureSlots(cubeProj(config), orgUnique);
+  const organizingCube = orgDice5
+    ? buildThinkingCubeBase(organizingProj.dotCount)
+    : buildOrganizingCubeSurface(orgK, organizingProj.dotCount);
+  const organizingVisible = Math.min(orgUnique, organizingProj.dotCount);
   const organizingBaseZ = gridBaseZ(config);
-  // Thinking clamps 3×3 → 4×4 (like dormant) so the cabinet projection has
-  // enough dots to read as a cube. n ≥ 7 renders a 4×4 lattice per face
-  // (56 unique surface dots); n = 7 specifically upgrades to an 8×8 projection
-  // since a native 7×7 (49 dots) can't hold all 56 surface points.
-  const thinkingProj =
-    config.n === 3
-      ? buildGridConfig(4)
-      : config.n === 7
-        ? buildGridConfig(8)
-        : config;
+  const thinkingProj = cubeProj(config);
   const thinkingDice16 = config.n >= 7;
   const thinkingCube = thinkingDice16
     ? buildThinkingCubeDice16(thinkingProj.dotCount)
