@@ -847,6 +847,48 @@ const pingOpacities = (
     return lerp(base, 0.12, t);
   });
 
+// ─── Hover (ring pulse) ────────────────────────────────────────────────────────
+// Continuous looping ring ripple from centre, based on ping's tent shape but
+// repeating indefinitely at a gentler pace.
+
+const HOVER_RING_SPEED = 1.5;
+const HOVER_RING_TAIL = PING_TAIL;
+const HOVER_RING_CYCLE = 1 + HOVER_RING_TAIL + 0.5; // sweep + tail + gap
+
+const hoverRingIntensity = (angle: number, rd: number): number => {
+  const phase = ((angle % HOVER_RING_CYCLE) + HOVER_RING_CYCLE) % HOVER_RING_CYCLE;
+  return pingTent(phase - rd, HOVER_RING_TAIL);
+};
+
+const hoverRingLayout = (
+  proj: GridConfig,
+  ringDists: number[],
+  baseZ: readonly number[],
+  angle = 0,
+): Vec3[] =>
+  Array.from({ length: proj.dotCount }, (_, i) => {
+    const bz = baseZ[i]!;
+    const t = hoverRingIntensity(angle, ringDists[i]!);
+    return {
+      x: i % proj.n,
+      y: Math.floor(i / proj.n),
+      z: lerp(bz, Math.max(0, bz - PING_DIP), t),
+    };
+  });
+
+const hoverRingOpacities = (
+  proj: GridConfig,
+  ringDists: number[],
+  baseOpa: readonly number[],
+  angle: number,
+): number[] =>
+  Array.from({ length: proj.dotCount }, (_, i) => {
+    const base = baseOpa[i]!;
+    if (base === 0) return 0;
+    const t = hoverRingIntensity(angle, ringDists[i]!);
+    return lerp(base, 0.12, t);
+  });
+
 // ─── Error ──────────────────────────────────────────────────────────────────────
 // X pattern (main + anti diagonal) with an outward ripple. Non-X dots stay at
 // 0.12 / baseZ. Wave expands by Chebyshev ring so all four arms move together.
@@ -933,21 +975,12 @@ const errorOpacities = (
 // screen's bottom-left to back-top-right at θ=π and returns at θ=2π.
 // Depth (z) and opacity are intentionally flat at this stage — layout-only.
 
-const THINKING_SPEED = 2; // radians / second
-const THINKING_CABINET_ANGLE = Math.PI / 4;
-const THINKING_DEPTH_SCALE = 0.5; // classic cabinet foreshortening
-const THINKING_CUBE_SCALE = 0.7; // keeps the rotated cube inside the grid
-// Default: each face reads as the 5-pip side of a die — 4 shared corners + 1
-// face centre = 14 unique surface dots. The 7×7 grid (n=7) upgrades to a
-// projection with 64 slots so each face can render a 4×4 lattice — 56 unique
-// surface dots, giving a "theoretical 16-pip" die face.
+// Dice-5 cube: 8 corners + 6 face centres = 14 unique surface dots.
+// Used by the organizing state's default face layout.
 const THINKING_DICE5_COUNT = 8 + 6;
-const THINKING_DICE16_COUNT = 4 ** 3 - 2 ** 3;
 
-// 8 cube corners, then 6 face centres, then arbitrary padding slots. The
-// padding positions don't matter because the thinking state masks them to
-// opacity 0 — keeping the dot array length aligned with `dotCount` so the
-// crossfade into/out of the state stays stable.
+// 8 cube corners, then 6 face centres, then padding slots. Padding positions
+// don't matter — the organizing state masks them to opacity 0.
 const buildThinkingCubeBase = (dotCount: number): Vec3[] => {
   const out: Vec3[] = [];
   for (let i = 0; i < Math.min(8, dotCount); i++) out.push(CUBE_CORNERS[i]!);
@@ -956,72 +989,6 @@ const buildThinkingCubeBase = (dotCount: number): Vec3[] => {
   while (out.length < dotCount) out.push({ x: 0, y: 0, z: 0 });
   return out;
 };
-
-// 4-sample-per-axis cube surface: axes sample {−1, −1/3, 1/3, 1}. A point is on
-// the surface whenever at least one coordinate is ±1. Total unique dots =
-// 4³ − 2³ = 56, rendering each face as a 4×4 grid.
-const buildThinkingCubeDice16 = (dotCount: number): Vec3[] => {
-  const samples = [-1, -1 / 3, 1 / 3, 1];
-  const surface: Vec3[] = [];
-  for (const x of samples)
-    for (const y of samples)
-      for (const z of samples)
-        if (Math.abs(x) === 1 || Math.abs(y) === 1 || Math.abs(z) === 1)
-          surface.push({ x, y, z });
-  const out: Vec3[] = [];
-  for (let i = 0; i < surface.length && out.length < dotCount; i++)
-    out.push(surface[i]!);
-  while (out.length < dotCount) out.push({ x: 0, y: 0, z: 0 });
-  return out;
-};
-
-// Rodrigues rotation around (1, 1, 0)/√2, closed-form. Using positive `angle`
-// spins the front-bottom-left vertex toward the top-right diagonal first.
-const rotateThinkingAxis = (p: Vec3, angle: number): Vec3 => {
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-  const half = (1 - c) / 2;
-  const k = s / Math.SQRT2;
-  return {
-    x: p.x * (1 - half) + p.y * half + p.z * k,
-    y: p.x * half + p.y * (1 - half) - p.z * k,
-    z: -p.x * k + p.y * k + p.z * c,
-  };
-};
-
-// `baseZ` is driven by the user's original grid (not `thinkingProj`) so dot
-// sizes match the dev/other states at every grid size — e.g. n=3 keeps its
-// one-size-larger dots even though the cube renders into a 4×4 projection.
-const thinkingLayout = (
-  config: GridConfig,
-  cube: Vec3[],
-  angle: number,
-  baseZ: number,
-): Vec3[] => {
-  const cx = config.grid.center;
-  const depthX = Math.cos(THINKING_CABINET_ANGLE) * THINKING_DEPTH_SCALE;
-  const depthY = Math.sin(THINKING_CABINET_ANGLE) * THINKING_DEPTH_SCALE;
-  return cube.map((pt) => {
-    const r = rotateThinkingAxis(pt, angle);
-    return {
-      x: cx + (r.x + r.z * depthX) * cx * THINKING_CUBE_SCALE,
-      y: cx + (r.y - r.z * depthY) * cx * THINKING_CUBE_SCALE,
-      z: baseZ * (0.5 + 0.6 * r.z),
-    };
-  });
-};
-
-const thinkingOpacities = (
-  config: GridConfig,
-  cube: Vec3[],
-  layoutAngle: number,
-  visibleCount: number,
-): number[] =>
-  Array.from({ length: config.dotCount }, (_, i) => {
-    if (i >= visibleCount) return 0;
-    const r = rotateThinkingAxis(cube[i]!, layoutAngle);
-    return clamp(0.5 + r.z * 1.5 - 0.3, 0, 1);
-  });
 
 // ─── Build ──────────────────────────────────────────────────────────────────────
 
@@ -1066,15 +1033,6 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     : buildOrganizingCubeSurface(orgK, organizingProj.dotCount);
   const organizingVisible = Math.min(orgUnique, organizingProj.dotCount);
   const organizingBaseZ = gridBaseZ(config);
-  const thinkingProj = cubeProj(config);
-  const thinkingDice16 = config.n >= 7;
-  const thinkingCube = thinkingDice16
-    ? buildThinkingCubeDice16(thinkingProj.dotCount)
-    : buildThinkingCubeBase(thinkingProj.dotCount);
-  const thinkingVisible = thinkingDice16
-    ? THINKING_DICE16_COUNT
-    : THINKING_DICE5_COUNT;
-  const thinkingBaseZ = gridBaseZ(config);
   const ranks = buildLoadingRanks(config);
   const errorData = buildErrorData(config);
   const indexingSeq = buildIndexingSequence(config);
@@ -1096,11 +1054,17 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     },
     hover: {
       label: STATE_META.hover.label,
-      layout: (a = 0) => hoverLayout(dormantProj, hoverRanks, hoverBaseZ, a),
+      layout: (a = 0) =>
+        hoverRingLayout(dormantProj, pingRingDists, hoverBaseZ, a),
       opacities: (ctx) =>
-        hoverOpacities(dormantProj, hoverRanks, dormantOpa, ctx.opacityAngle),
+        hoverRingOpacities(
+          dormantProj,
+          pingRingDists,
+          dormantOpa,
+          ctx.opacityAngle,
+        ),
       animated: true,
-      layoutSpeed: HOVER_SPEED,
+      layoutSpeed: HOVER_RING_SPEED,
       projConfig: dormantProj,
     },
     ping: {
@@ -1140,18 +1104,12 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     },
     thinking: {
       label: STATE_META.thinking.label,
-      layout: (a = 0) =>
-        thinkingLayout(thinkingProj, thinkingCube, a, thinkingBaseZ),
+      layout: (a = 0) => hoverLayout(dormantProj, hoverRanks, hoverBaseZ, a),
       opacities: (ctx) =>
-        thinkingOpacities(
-          thinkingProj,
-          thinkingCube,
-          ctx.layoutAngle,
-          thinkingVisible,
-        ),
+        hoverOpacities(dormantProj, hoverRanks, dormantOpa, ctx.opacityAngle),
       animated: true,
-      layoutSpeed: THINKING_SPEED,
-      projConfig: thinkingProj,
+      layoutSpeed: HOVER_SPEED,
+      projConfig: dormantProj,
     },
     loading: {
       label: STATE_META.loading.label,
