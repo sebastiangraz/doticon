@@ -43,7 +43,6 @@
     & > * {
       display: flex;
       flex-direction: row;
-      /* flex-wrap: wrap; */
       justify-content: flex-start;
       align-items: center;
     }
@@ -88,13 +87,12 @@
 }
 
 .controlsRow {
-  /* max-width: 720px; */
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  column-gap: 1rlh;
+  column-gap: 2rlh;
   row-gap: 2rlh;
   padding-bottom: 3rlh;
 }
@@ -182,18 +180,20 @@
   display: flex;
   flex-wrap: wrap;
   overflow: clip;
-  /* filter: drop-shadow(0 0 1px red); */
   background: transparent;
-  border-radius: 0.25rlh;
+  border-radius: 1.75rlh;
+  max-width: 652px;
+  corner-shape: superellipse(1.4);
   overflow: hidden;
   outline: 1px var(--ui-border) solid;
-  /* clip-path: xywh(0 0 100% 100% round 0.25rlh); */
   outline-offset: -1px;
+  flex: 1 1 0%;
+  min-width: 240px;
 }
 
 .stateButton {
-  flex: 1 1 0;
-  min-width: calc(100% / 6);
+  flex: 1 1 0%;
+  min-width: unset;
   padding: 0.65rem 0.85rlh;
   font-size: 0.65rlh;
   font-family: inherit;
@@ -215,6 +215,9 @@
   user-select: none;
   &:hover {
     background: var(--ui-border);
+  }
+  @media (min-width: 768px) {
+    min-width: calc(100% / 5);
   }
 }
 
@@ -267,7 +270,7 @@
   border-radius: 999px;
   background: light-dark(var(--ui-background), var(--ui-foreground));
   box-shadow: 0 0 0 1px var(--ui-border);
-  margin-top: -7px; /* center thumb on 4px track */
+  margin-top: -7px;
 }
 
 .gridSlider:focus-visible {
@@ -279,8 +282,8 @@
 }
 
 .gridValue {
-  min-width: 1.2em;
-  text-align: right;
+  min-width: 6ch;
+  text-align: center;
 }
 
 .toggle {
@@ -425,37 +428,29 @@
 
 .inSitu {
   gap: 0;
-  border: 1px solid var(--ui-border);
+  outline: 1px var(--ui-border) solid;
+  outline-offset: -1px;
+  display: grid;
+  overflow: clip;
+  grid-template-columns: repeat(3, 1fr);
 }
 
-/* .inSituGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border: 1px solid var(--ui-border);
-  border-radius: 8px;
-  overflow: hidden;
-  width: 100%;
-} */
-
 .card {
-  /* padding: 1.5rlh; */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 180px;
-  border-right: 1px solid var(--ui-border);
+  min-height: 208px;
+  box-shadow:
+    -0.85px 0 0 0 var(--ui-border),
+    0 -0.85px 0 0 var(--ui-border);
   overflow: clip;
-  &:last-child {
-    border-right: none;
-  }
 }
-
-/* — Button — */
 
 .button {
   display: inline-flex;
-  align-items: flex-start;
+  align-items: center;
+
   gap: 12px;
   padding: 0.5rlh 0.85rlh;
   font-size: 0.75rlh;
@@ -464,6 +459,7 @@
   text-box-edge: cap alphabetic;
   text-box-trim: trim-both;
   letter-spacing: 0.04em;
+  line-height: 1;
   border: 1px solid var(--ui-border);
   border-radius: 99em;
   background: transparent;
@@ -477,8 +473,6 @@
     background: var(--ui-border);
   }
 }
-
-/* — Table — */
 
 .table {
   width: 100%;
@@ -539,6 +533,7 @@
   gap: 0.5rlh;
   padding: 8px 11px;
   font-size: 0.7rlh;
+  max-width: 70%;
   & > *:not(svg) {
     color: var(--ui-secondary);
   }
@@ -557,7 +552,11 @@
   }
 }
 
-/* Scroll-linked parallax for the WebGL backdrop (see _shell.tsx). */
+.cardTable {
+  height: 128px;
+  overflow: hidden;
+}
+
 @keyframes shaderParallaxShift {
   from {
     transform: translate3d(0, 0, 0);
@@ -576,7 +575,6 @@
 
 @supports (animation-timeline: scroll()) {
   .shaderParallax {
-    /* Duration is ignored for scroll timelines; any non-zero value satisfies the shorthand. */
     animation: shaderParallaxShift 1s linear both;
     animation-timeline: scroll();
   }

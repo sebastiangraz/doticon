@@ -37,8 +37,8 @@ const GuidelinesPage = () => {
           <code>state</code> can be set to <StateKeyList />.
           <ExposeProps className={styles.prop} ignoreProps={["grid", "size"]}>
             <DotIcon size={24} state={"dormant"} grid={4} />
-            <DotIcon size={24} state={"thinking"} grid={4} />
-            <DotIcon size={24} state={"processing"} grid={4} />
+            <DotIcon size={24} state={"compiling"} grid={4} />
+            <DotIcon size={24} state={"organizing"} grid={4} />
           </ExposeProps>
         </li>
         <li>
@@ -69,12 +69,12 @@ const GuidelinesPage = () => {
           >
             <DotIcon
               size={24}
-              state={"thinking"}
+              state={"compiling"}
               grid={4}
               color="light-dark(#011D28, #9EEBFF)"
             />
-            <DotIcon size={24} state={"thinking"} grid={4} color="#1E91AF" />
-            <DotIcon size={24} state={"thinking"} grid={4} />
+            <DotIcon size={24} state={"compiling"} grid={4} color="#1E91AF" />
+            <DotIcon size={24} state={"compiling"} grid={4} />
           </ExposeProps>
         </li>
       </ul>
@@ -100,8 +100,8 @@ const GuidelinesPage = () => {
         <li>
           Avoid changing icon state by replacing it with a new component
           instance. This will reset the animation phase and cause a jarring
-          transition. For smooth transitions modify the <code>state</code> prop
-          directly.
+          transition. For smooth transitions between two states, modify the{" "}
+          <code>state</code> prop directly.
         </li>
         <li>
           Do not render more than <strong>10</strong> animated instances on the
@@ -118,8 +118,8 @@ const GuidelinesPage = () => {
 
       <h1>Types & Helpers</h1>
       <p>
-        Use the exported types and helpers — StateKey, STATE_KEYS,
-        getStateLabel, getStateUsage — when building menus, tests, or
+        Use the exported types and helpers — `StateKey`, `STATE_KEYS`,
+        `getStateLabel`, `getStateUsage` — when building menus, tests, or
         documentation that list states in one place.
       </p>
     </main>
