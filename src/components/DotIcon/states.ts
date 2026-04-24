@@ -524,9 +524,9 @@ const loadingOpacities = (
   });
 };
 
-// Hover: a sine pulse travels an invisible S-path (mirrored Z with serifs)
-// through the grid. Each dot's rank is its nearest-point arc-length along the
-// polyline, normalized to [0,1]. Works uniformly for any grid size.
+// Thinking (S-path pulse): a sine pulse travels an invisible S-path (mirrored Z
+// with serifs) through the grid. Each dot's rank is its nearest-point arc-length
+// along the polyline, normalized to [0,1]. Works uniformly for any grid size.
 const HOVER_SPEED = 0.7;
 const HOVER_PULSE_WIDTH = 0.8;
 const HOVER_NUM_WAVES = 1;
@@ -541,7 +541,7 @@ const HOVER_PATH: { x: number; y: number }[] = [
   { x: 0, y: 1 },  // bottom-left   (←)
 ];
 
-const buildHoverRanks = (n: number): number[] => {
+const buildThinkingRanks = (n: number): number[] => {
   const max = n - 1;
   const pts = HOVER_PATH.map((p) => ({ x: p.x * max, y: p.y * max }));
 
@@ -589,7 +589,7 @@ const buildHoverRanks = (n: number): number[] => {
   });
 };
 
-const hoverPulse = (phase: number, rank: number): number => {
+const thinkingPulse = (phase: number, rank: number): number => {
   let best = 0;
   for (let w = 0; w < HOVER_NUM_WAVES; w++) {
     const t = (((phase + w / HOVER_NUM_WAVES - rank) % 1) + 1) % 1;
@@ -600,7 +600,7 @@ const hoverPulse = (phase: number, rank: number): number => {
   return best;
 };
 
-const hoverLayout = (
+const thinkingLayout = (
   proj: GridConfig,
   ranks: number[],
   baseZ: readonly number[],
@@ -611,12 +611,12 @@ const hoverLayout = (
     const x = i % proj.n;
     const y = Math.floor(i / proj.n);
     const bz = baseZ[i]!;
-    const p = hoverPulse(phase, ranks[i]!);
+    const p = thinkingPulse(phase, ranks[i]!);
     return { x, y, z: lerp(bz, Math.max(0, bz - 2), p) };
   });
 };
 
-const hoverOpacities = (
+const thinkingOpacities = (
   proj: GridConfig,
   ranks: number[],
   baseOpa: readonly number[],
@@ -626,7 +626,7 @@ const hoverOpacities = (
   return Array.from({ length: proj.dotCount }, (_, i) => {
     const base = baseOpa[i]!;
     if (base === 0) return 0;
-    const p = hoverPulse(phase, ranks[i]!);
+    const p = thinkingPulse(phase, ranks[i]!);
     return lerp(base, 0.12, p);
   });
 };
@@ -856,7 +856,8 @@ const HOVER_RING_TAIL = PING_TAIL;
 const HOVER_RING_CYCLE = 1 + HOVER_RING_TAIL + 0.5; // sweep + tail + gap
 
 const hoverRingIntensity = (angle: number, rd: number): number => {
-  const phase = ((angle % HOVER_RING_CYCLE) + HOVER_RING_CYCLE) % HOVER_RING_CYCLE;
+  const phase =
+    ((angle % HOVER_RING_CYCLE) + HOVER_RING_CYCLE) % HOVER_RING_CYCLE;
   return pingTent(phase - rd, HOVER_RING_TAIL);
 };
 
@@ -1014,8 +1015,8 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const successProj = config.n === 3 ? buildGridConfig(4) : config;
   const successZ = buildSuccessZ(config.n);
   const successOpa = buildSuccessOpacities(config.n);
-  const hoverBaseZ = flatGrid(dormantProj, dormantZ).map((p) => p.z);
-  const hoverRanks = buildHoverRanks(dormantProj.n);
+  const dormantBaseZ = flatGrid(dormantProj, dormantZ).map((p) => p.z);
+  const thinkingRanks = buildThinkingRanks(dormantProj.n);
   const pingRingDists = buildPingRingDists(dormantProj);
   const sphere = buildSphereBase(config);
   // Organizing: cube with face-density control. Dice-5 reuses Thinking's
@@ -1055,7 +1056,7 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     hover: {
       label: STATE_META.hover.label,
       layout: (a = 0) =>
-        hoverRingLayout(dormantProj, pingRingDists, hoverBaseZ, a),
+        hoverRingLayout(dormantProj, pingRingDists, dormantBaseZ, a),
       opacities: (ctx) =>
         hoverRingOpacities(
           dormantProj,
@@ -1069,7 +1070,7 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     },
     ping: {
       label: STATE_META.ping.label,
-      layout: (a = 0) => pingLayout(dormantProj, pingRingDists, hoverBaseZ, a),
+      layout: (a = 0) => pingLayout(dormantProj, pingRingDists, dormantBaseZ, a),
       opacities: (ctx) =>
         pingOpacities(dormantProj, pingRingDists, dormantOpa, ctx.opacityAngle),
       animated: true,
@@ -1104,9 +1105,10 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     },
     thinking: {
       label: STATE_META.thinking.label,
-      layout: (a = 0) => hoverLayout(dormantProj, hoverRanks, hoverBaseZ, a),
+      layout: (a = 0) =>
+        thinkingLayout(dormantProj, thinkingRanks, dormantBaseZ, a),
       opacities: (ctx) =>
-        hoverOpacities(dormantProj, hoverRanks, dormantOpa, ctx.opacityAngle),
+        thinkingOpacities(dormantProj, thinkingRanks, dormantOpa, ctx.opacityAngle),
       animated: true,
       layoutSpeed: HOVER_SPEED,
       projConfig: dormantProj,
