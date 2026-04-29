@@ -702,11 +702,11 @@
   /* Idle defaults: layers fully transparent. Hues match the "compiling"
      stage so the entry transition is a pure opacity fade with no color
      drift; only the compiling→error transition crossfades hues. */
-  --bg-color-a: rgb(0, 154, 121);
+  --bg-color-a: hsl(167, 100%, 30%);
   --bg-color-b: hsl(210, 100%, 49%);
   --bg-opacity: 0;
-  --ring-color-a: #1e91af;
-  --ring-color-b: #9eebff;
+  --ring-color-a: hsl(192, 71%, 40%);
+  --ring-color-b: hsl(192, 100%, 81%);
   --ring-opacity: 0;
 
   transition:
@@ -732,12 +732,12 @@
 }
 
 .chatbox[data-stage="error"] {
-  --bg-color-a: oklch(0.62 0.22 25);
-  --bg-color-b: oklch(0.8 0.17 55);
+  --bg-color-a: hsla(348, 100%, 48%, 0.28);
+  --bg-color-b: hsla(27, 100%, 55%, 0.32);
   --bg-opacity: 0.28;
-  --ring-color-a: oklch(0.65 0.22 25);
-  --ring-color-b: oklch(0.88 0.14 70);
-  --ring-opacity: 0.32;
+  --ring-color-a: hsla(348, 100%, 61%, 0.32);
+  --ring-color-b: hsla(15, 100%, 48%, 0.32);
+  --ring-opacity: 1;
 }
 
 .chatboxInner {
