@@ -106,7 +106,7 @@
   width: 100%;
   column-gap: 2rlh;
   row-gap: 2rlh;
-  padding-bottom: 3rlh;
+  margin-bottom: 3rlh;
 }
 .navigation {
   width: 100%;
@@ -400,6 +400,44 @@
   flex-shrink: 0;
 }
 
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  row-gap: 2rlh;
+
+  & > div {
+    display: flex;
+    padding-inline: 1rlh;
+    padding-bottom: 1rlh;
+    min-height: 4rlh;
+    align-items: start;
+    justify-content: end;
+    background-position: calc(1rlh - 1px) calc(1rlh - 1px);
+    border-bottom: 1px solid var(--ui-border);
+    border-left: 1px solid var(--ui-border);
+    flex-direction: column;
+    row-gap: 0.5rlh;
+
+    & > div {
+      display: flex;
+    }
+
+    &:nth-child(3n) {
+      border-right: 1px solid var(--ui-border);
+    }
+
+    span {
+      color: var(--ui-tertiary);
+      font-size: 0.7rlh;
+    }
+
+    :global(.propValue span) {
+      color: var(--ui-secondary);
+    }
+  }
+}
+
 .prop {
   --sizeX: 1rlh;
   --sizeY: 1rlh;
@@ -445,6 +483,7 @@
   display: grid;
   overflow: clip;
   grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 3rlh;
 }
 
 .card {
