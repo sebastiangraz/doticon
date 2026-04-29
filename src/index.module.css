@@ -84,6 +84,10 @@
     padding: 0.05rlh 0.25rlh;
     border-radius: 0.25rlh;
   }
+  pre {
+    font-size: inherit;
+    font-family: inherit;
+  }
   .stateList {
     span strong {
       color: var(--ui-secondary);

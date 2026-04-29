@@ -63,11 +63,11 @@ const GuidelinesPage = () => {
           </ExposeProps>
         </li>
         <li>
-          <code>grid</code> integer N for an N×N grid. Treat <strong>3</strong>{" "}
-          as the small tier, <strong>4</strong> as the default, and{" "}
-          <strong>5+</strong> when you need a denser or more custom mark. Do not
-          go above <strong>7</strong> as the code is not optimized for higher
-          grids.
+          <code>grid</code> integer <i>N</i> for an <i>N×N</i> grid. Treat{" "}
+          <strong>3</strong> as the small tier, <strong>4</strong> as the
+          default, and <strong>5+</strong> when you need a denser or more custom
+          mark. Do not go above <strong>7</strong> as the code is not optimized
+          for higher grids.
           <ExposeProps className={styles.prop} ignoreProps={["state", "size"]}>
             <DotIcon size={24} grid={3} />
             <DotIcon size={24} grid={7} />
@@ -111,9 +111,9 @@ const GuidelinesPage = () => {
 
       <h1>Embedding & Assets</h1>
       <p>
-        The playground can copy the current SVG to the clipboard — useful for
-        mocks, specs, or one-off assets. For product UI, prefer the React
-        component as it includes all motion logic.
+        The playground can copy the current SVG to the clipboard. This is useful
+        for mocks, specs, or one-off assets. For real-world interfaces, prefer
+        the React component as it includes all motion logic.
       </p>
 
       <h1>Code Hygiene</h1>
@@ -139,9 +139,16 @@ const GuidelinesPage = () => {
 
       <h1>Types & Helpers</h1>
       <p>
-        Use the exported types and helpers — `StateKey`, `STATE_KEYS`,
-        `getStateLabel`, `getStateUsage` — when building menus, tests, or
-        documentation that list states in one place.
+        Use the exported types and helpers <code>StateKey</code>,{" "}
+        <code>STATE_KEYS</code>,<code>getStateLabel</code>,{" "}
+        <code>getStateUsage</code> when building menus, tests, or documentation
+        that list states in one place.
+      </p>
+      <p>
+        The codebase has a dev environment flag <code>isDevStateEnabled</code>{" "}
+        used throughout. It's used for debugging purposes while locally
+        developing. Which is why there may be discrepancies in the deployed
+        version.
       </p>
     </main>
   );
