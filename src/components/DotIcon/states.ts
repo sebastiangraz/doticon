@@ -939,7 +939,7 @@ const errorLayout = (
   return Array.from({ length: dotCount }, (_, i) => {
     const x = i % n;
     const y = Math.floor(i / n);
-    if (err.ring[i] < 0) return { x, y, z: baseZ };
+    if (err.ring[i] < 0) return { x, y, z: baseZ - 1 };
     const d = w - err.ring[i];
     // Only echoes dip Z — leading edge stays at baseZ.
     const dip = clamp(0.5 * tent(d - 1) + 0.25 * tent(d - 2), 0, 1);
@@ -1070,7 +1070,8 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     },
     ping: {
       label: STATE_META.ping.label,
-      layout: (a = 0) => pingLayout(dormantProj, pingRingDists, dormantBaseZ, a),
+      layout: (a = 0) =>
+        pingLayout(dormantProj, pingRingDists, dormantBaseZ, a),
       opacities: (ctx) =>
         pingOpacities(dormantProj, pingRingDists, dormantOpa, ctx.opacityAngle),
       animated: true,
@@ -1108,7 +1109,12 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
       layout: (a = 0) =>
         thinkingLayout(dormantProj, thinkingRanks, dormantBaseZ, a),
       opacities: (ctx) =>
-        thinkingOpacities(dormantProj, thinkingRanks, dormantOpa, ctx.opacityAngle),
+        thinkingOpacities(
+          dormantProj,
+          thinkingRanks,
+          dormantOpa,
+          ctx.opacityAngle,
+        ),
       animated: true,
       layoutSpeed: HOVER_SPEED,
       projConfig: dormantProj,

@@ -13,7 +13,7 @@ import { isDevStateEnabled } from "#/env";
 export const Route = createFileRoute("/_shell/")({
   component: () => {
     const defaultGridSizeOptions = [3, 4, 7];
-    const devGridSizeOptions = [3, 4, 5, 6, 7, 10, 14];
+    const devGridSizeOptions = [3, 4, 5, 6, 7, 8, 10];
     const GRID_SIZE_OPTIONS = isDevStateEnabled
       ? devGridSizeOptions
       : defaultGridSizeOptions;
