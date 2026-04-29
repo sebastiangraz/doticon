@@ -73,6 +73,7 @@ const Chatbox = ({ "data-label": label }: { "data-label"?: string }) => {
             </motion.div>
           </span>
           <div className={styles.chatboxGradient}></div>
+          <div className={styles.chatboxRing}></div>
         </motion.div>
         <motion.span
           className={styles.chatboxError}
@@ -99,7 +100,7 @@ const Chatbox = ({ "data-label": label }: { "data-label"?: string }) => {
             width="200%"
             height="200%"
           >
-            <feGaussianBlur in="SourceGraphic" stdDeviation="0.11" />
+            <feGaussianBlur in="SourceGraphic" stdDeviation="0.12" />
           </filter>
           <mask id="pillRingMask" maskContentUnits="objectBoundingBox">
             {/* White pill = visible area */}

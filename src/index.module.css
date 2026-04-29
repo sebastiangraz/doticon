@@ -653,9 +653,15 @@
   width: round(100%, 2px);
 } */
 
-@property --border-angle {
+@property --bg-angle {
   syntax: "<angle>";
-  inherits: true;
+  inherits: false;
+  initial-value: 0turn;
+}
+
+@property --ring-angle {
+  syntax: "<angle>";
+  inherits: false;
   initial-value: 0turn;
 }
 
@@ -666,11 +672,11 @@
   corner-shape: superellipse(1.4);
   overflow: clip;
   display: grid;
-  background: var(--ui-border);
+  background: light-dark(#fff, var(--ui-border));
 }
 .chatboxInner {
   grid-area: 1 / 1;
-  z-index: 1;
+  z-index: 2;
   font-size: 0.7rlh;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -682,34 +688,58 @@
   padding: 0 1rlh 0 1.5rlh;
   white-space: nowrap;
 }
+
 .chatboxGradient {
+  --bg-color-a: rgb(0, 154, 121);
+  --bg-color-b: hsl(210, 100%, 49%);
+  --bg-opacity: 0.2;
+
   border: solid 2px transparent;
   grid-area: 1 / 1;
   z-index: 0;
   mask: url(#pillRingMask);
-  --border-angle: 0turn;
-  --main-bg: conic-gradient(
-    in lch from var(--border-angle),
-    hsl(210, 48%, 33%),
-    transparent 10%,
-    transparent 60%,
-    hsl(210, 48%, 33%) 95%
-  );
   border-radius: 1rlh;
   corner-shape: superellipse(1.4);
-  --gradient-border: conic-gradient(
-    in lch from var(--border-angle),
-    var(--ui-border) 25%,
-    hsl(205, 100%, 33%) 50%,
-    rgb(151, 235, 132) 95%,
-    var(--ui-border)
-  );
-  background:
-    var(--main-bg) padding-box,
-    var(--gradient-border) border-box;
+  background: conic-gradient(
+      in rec2020 from var(--bg-angle),
+      transparent,
+      var(--bg-color-a) 5%,
+      var(--bg-color-b) 30%,
+      transparent 60%
+    )
+    border-box;
   background-position: center center;
-  animation: bg-spin 5s linear infinite;
+  opacity: var(--bg-opacity);
+  animation: chatboxBgSpin 5s linear infinite;
 }
+
+.chatboxRing {
+  --ring-color-a: #1e91af;
+  --ring-color-b: #9eebff;
+  --ring-opacity: 0.24;
+
+  border: solid 1.5px transparent;
+  grid-area: 1 / 1;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: 1rlh;
+  corner-shape: superellipse(1.4);
+  background: conic-gradient(
+      in lch from var(--ring-angle),
+      var(--ui-border),
+      var(--ring-color-a) 20%,
+      var(--ring-color-b) 57%,
+      var(--ui-border) 60%
+    )
+    border-box;
+  mask:
+    linear-gradient(#000 0 0) padding-box,
+    linear-gradient(#000 0 0) border-box;
+  mask-composite: exclude;
+  opacity: var(--ring-opacity);
+  animation: chatboxRingSpin 5s linear infinite;
+}
+
 .chatboxSend {
   display: inline-flex;
   flex-shrink: 0;
@@ -720,9 +750,14 @@
   margin-top: 0.5rlh;
   font-size: 0.65rlh;
 }
-@keyframes bg-spin {
+@keyframes chatboxBgSpin {
   to {
-    --border-angle: 1turn;
+    --bg-angle: 1turn;
+  }
+}
+@keyframes chatboxRingSpin {
+  to {
+    --ring-angle: 1turn;
   }
 }
 /* 
