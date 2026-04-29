@@ -122,7 +122,7 @@ export const Route = createFileRoute("/_shell/")({
           </label>
         </div>
         <div className={`${styles.row} ${styles.inSitu}`}>
-          <div className={`${styles.column} ${styles.card}`}>
+          <div className={`${styles.column} ${styles.card}`} data-label="CTA">
             <button type="button" className={styles.button}>
               <DotIcon size={16} state={iconState} grid={4} />
               Generate
@@ -131,6 +131,7 @@ export const Route = createFileRoute("/_shell/")({
 
           <div
             className={`${styles.column} ${styles.card} ${styles.cardTable}`}
+            data-label="Table"
           >
             <table className={styles.table}>
               <tbody>
@@ -219,14 +220,21 @@ export const Route = createFileRoute("/_shell/")({
 
           <div
             className={`${styles.column} ${styles.card} ${styles.cardSocial}`}
+            data-label="Social"
           >
             <DotIcon size={100} state={iconState} grid={7} />
           </div>
 
-          <AIChat />
+          <AIChat data-label="Chat" />
 
-          <div className={`${styles.column} ${styles.card}`}></div>
-          <div className={`${styles.column} ${styles.card}`}></div>
+          <div
+            className={`${styles.column} ${styles.card}`}
+            data-label="Gradient"
+          ></div>
+          <div
+            className={`${styles.column} ${styles.card}`}
+            data-label="Color"
+          ></div>
         </div>
 
         <ExposeProps

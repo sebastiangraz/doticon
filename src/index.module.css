@@ -484,9 +484,37 @@
   overflow: clip;
   grid-template-columns: repeat(3, 1fr);
   margin-bottom: 3rlh;
+  .card {
+    &::before {
+      content: attr(data-label);
+      z-index: 1;
+      mix-blend-mode: plus-lighter;
+      display: block;
+      width: fit-content;
+      height: fit-content;
+      inset: 0.75rlh;
+      background: color-mix(in srgb, var(--ui-foreground) 8%, transparent);
+      box-shadow:
+        0 0 1.5px 1px color-mix(in srgb, var(--ui-foreground) 2%, transparent)
+          inset,
+        0 0 0.75px 0 color-mix(in srgb, var(--ui-foreground) 12%, transparent)
+          inset;
+      position: absolute;
+      padding: 0.125rlh 0.35rlh;
+      border-radius: 0.75rlh;
+      corner-shape: superellipse(1.4);
+      font-size: 0.6rlh;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ui-secondary);
+      text-align: center;
+      backdrop-filter: blur(10px);
+    }
+  }
 }
 
 .card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -573,9 +601,13 @@
 .user {
   align-self: flex-end;
   background: var(--ui-border);
-  border-radius: 12px 12px 2px 12px;
+  border-radius: 1rlh 1rlh 2px 1rlh;
+  box-shadow:
+    0 0 1.5px 1px color-mix(in srgb, var(--ui-foreground) 2%, transparent) inset,
+    0 0 0.75px 0 color-mix(in srgb, var(--ui-foreground) 12%, transparent) inset;
   max-width: 85%;
   color: var(--ui-secondary);
+  corner-shape: superellipse(1.4);
 }
 
 .bubble {

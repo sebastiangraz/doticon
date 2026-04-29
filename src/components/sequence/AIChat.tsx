@@ -52,7 +52,7 @@ const bubbleTransition = {
 const HIDDEN = { opacity: 0, y: 6, scale: 0.99 };
 const SHOWN = { opacity: 1, y: 0, scale: 1 };
 
-const AIChat = () => {
+const AIChat = ({ "data-label": label }: { "data-label"?: string }) => {
   const { id, isAtOrAfter } = useSequence(STEPS);
 
   // Remount `ScrambleText` at the start of each new cycle so it resets to
@@ -70,7 +70,7 @@ const AIChat = () => {
   const revealText = id !== "idle" && isAtOrAfter("typing");
 
   return (
-    <div className={`${styles.column} ${styles.card}`}>
+    <div className={`${styles.column} ${styles.card}`} data-label={label}>
       <div className={styles.chat}>
         <motion.div
           className={`${styles.bubble} ${styles.user}`}
