@@ -18,9 +18,9 @@ const STEPS: readonly SequenceStep<StepId>[] = [
   { id: "fadein", duration: 400 },
   { id: "ready", duration: 900 },
   { id: "pressing", duration: 200 },
-  { id: "compiling", duration: 2200 },
-  { id: "error", duration: 2200 },
-  { id: "fadeout", duration: 600 },
+  { id: "compiling", duration: 4000 },
+  { id: "error", duration: 4000 },
+  { id: "fadeout", duration: 1000 },
   { id: "end", duration: 300 },
 ];
 
@@ -35,8 +35,6 @@ const ICON_FOR_STEP: Record<StepId, StateKey> = {
   end: "dormant",
 };
 
-type ChatboxStage = "idle" | "compiling" | "error";
-
 const Chatbox = ({ "data-label": label }: { "data-label"?: string }) => {
   const { id, isAtOrAfter } = useSequence(STEPS);
 
@@ -50,11 +48,7 @@ const Chatbox = ({ "data-label": label }: { "data-label"?: string }) => {
   // Drives bg/ring color + opacity vars in CSS via [data-stage="..."].
   // "error" stays latched through fadeout/end so the red hues hold while
   // the wrapper itself fades out via motion.
-  const stage: ChatboxStage = isError
-    ? "error"
-    : isGradient
-      ? "compiling"
-      : "idle";
+  const stage = isError ? "error" : isGradient ? "compiling" : "idle";
 
   return (
     <>
@@ -70,8 +64,12 @@ const Chatbox = ({ "data-label": label }: { "data-label"?: string }) => {
             Ask anything
             <motion.div
               className={styles.chatboxSend}
-              animate={isPressed ? { scale: 0.82 } : { scale: 1 }}
-              transition={{ duration: 0.1, ease: "easeInOut" }}
+              animate={
+                isPressed
+                  ? { background: "hsla(0, 0%, 50%, 0.04)" }
+                  : { background: "hsla(0, 0%, 50%, 0)" }
+              }
+              transition={{ duration: 0.2, ease: "easeInOut" }}
             >
               <DotIcon size={20} state={iconState} grid={4} />
             </motion.div>

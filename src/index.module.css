@@ -645,14 +645,6 @@
   overflow: hidden;
 }
 
-/* .chatboxWrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: round(100%, 2px);
-} */
-
 @property --bg-angle {
   syntax: "<angle>";
   inherits: false;
@@ -702,12 +694,12 @@
   /* Idle defaults: layers fully transparent. Hues match the "compiling"
      stage so the entry transition is a pure opacity fade with no color
      drift; only the compiling→error transition crossfades hues. */
-  --bg-color-a: hsl(167, 100%, 30%);
-  --bg-color-b: hsl(210, 100%, 49%);
-  --bg-opacity: 0;
-  --ring-color-a: hsl(192, 71%, 40%);
-  --ring-color-b: hsl(192, 100%, 81%);
-  --ring-opacity: 0;
+  --bg-color-a: var(--ui-foreground);
+  --bg-color-b: var(--ui-foreground);
+  --ring-color-a: var(--ui-border);
+  --ring-color-b: var(--ui-border);
+  --bg-opacity: 0.04;
+  --ring-opacity: 0.8;
 
   transition:
     --bg-color-a 0.45s ease,
@@ -727,6 +719,10 @@
 }
 
 .chatbox[data-stage="compiling"] {
+  --bg-color-a: hsl(167, 100%, 30%);
+  --bg-color-b: hsl(210, 100%, 49%);
+  --ring-color-a: hsl(192, 71%, 40%);
+  --ring-color-b: hsl(192, 100%, 81%);
   --bg-opacity: 0.2;
   --ring-opacity: 0.24;
 }
@@ -734,10 +730,10 @@
 .chatbox[data-stage="error"] {
   --bg-color-a: hsla(348, 100%, 48%, 0.28);
   --bg-color-b: hsla(27, 100%, 55%, 0.32);
-  --bg-opacity: 0.28;
   --ring-color-a: hsla(348, 100%, 61%, 0.32);
   --ring-color-b: hsla(15, 100%, 48%, 0.32);
-  --ring-opacity: 1;
+  --bg-opacity: 0.28;
+  --ring-opacity: 0.32;
 }
 
 .chatboxInner {
@@ -751,7 +747,7 @@
   color: var(--ui-tertiary);
   justify-content: space-between;
   gap: 0.5rlh;
-  padding: 0 1rlh 0 1.5rlh;
+  padding: 0 0 0 1.5rlh;
   white-space: nowrap;
 }
 
@@ -773,6 +769,10 @@
   background-position: center center;
   opacity: var(--bg-opacity);
   animation: chatboxBgSpin 5s linear infinite;
+  animation-play-state: running;
+  [data-stage="error"] & {
+    animation-play-state: paused;
+  }
 }
 
 .chatboxRing {
@@ -796,12 +796,22 @@
   mask-composite: exclude;
   opacity: var(--ring-opacity);
   animation: chatboxRingSpin 5s linear infinite;
+  [data-stage="error"] & {
+    animation-play-state: paused;
+  }
 }
 
 .chatboxSend {
   display: inline-flex;
   flex-shrink: 0;
   color: var(--ui-foreground);
+  border-left: 1.5px solid
+    color-mix(in srgb, var(--ui-foreground) 4%, transparent);
+  aspect-ratio: 1 / 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .chatboxError {
   color: var(--ui-tertiary);
@@ -818,104 +828,6 @@
     --ring-angle: 1turn;
   }
 }
-/* 
-.chatboxOuter {
-  position: relative;
-  border-radius: 999px;
-  padding: 1px;
-  isolation: isolate;
-  overflow: clip;
-  width: round(100%, 2px);
-}
-
-
-.chatboxOuter::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--ui-border);
-  z-index: -1;
-}
-
-
-.chatboxOuter::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  --chatbox-angle: 0deg;
-  background: conic-gradient(
-    from var(--chatbox-angle),
-    #a855f7,
-    #3b82f6,
-    #06b6d4,
-    #a855f7
-  );
-  animation: chatboxSpin 1.8s linear infinite;
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  z-index: 0;
-}
-
-.chatboxGradient::before {
-  opacity: 1;
-}
-
-.chatboxErrorBorder::before {
-  background: conic-gradient(
-    from var(--chatbox-angle),
-    #ef4444,
-    #f97316,
-    #ef4444
-  );
-  opacity: 1;
-}
-
-.chatboxInner {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: round(5vmin, 2px);
-  background: var(--ui-background);
-  border-radius: 999px;
-}
-
-.chatboxPlaceholder {
-  flex: 1;
-  font-size: 0.7rlh;
-  color: var(--ui-tertiary);
-  user-select: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.chatboxSend {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-  flex-shrink: 0;
-  color: inherit;
-}
-
-.chatboxErrorLabel {
-  font-size: 0.62rlh;
-  color: #ef4444;
-  letter-spacing: 0.03em;
-  user-select: none;
-} */
-
-/* ── End chatbox sequence ─────────────────────────────────── */
 
 @keyframes shaderParallaxShift {
   from {
