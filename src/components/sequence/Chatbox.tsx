@@ -100,7 +100,28 @@ const Chatbox = ({ "data-label": label }: { "data-label"?: string }) => {
             width="200%"
             height="200%"
           >
-            <feGaussianBlur in="SourceGraphic" stdDeviation="0.12" />
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="13 1"
+              numOctaves="1"
+              seed="15"
+              result="noise"
+            />
+            <feDisplacementMap
+              in="SourceGraphic"
+              in2="noise"
+              scale="1.5"
+              xChannelSelector="R"
+              yChannelSelector="G"
+              result="displaced"
+            />
+            <feComposite
+              in="SourceGraphic"
+              in2="displaced"
+              operator="over"
+              result="filled"
+            />
+            <feGaussianBlur in="filled" stdDeviation="0.09" />
           </filter>
           <mask id="pillRingMask" maskContentUnits="objectBoundingBox">
             {/* White pill = visible area */}
@@ -111,7 +132,7 @@ const Chatbox = ({ "data-label": label }: { "data-label"?: string }) => {
               y="0.16"
               width="0.86"
               height="0.68"
-              rx="0.1"
+              rx="0.2"
               fill="#000"
               filter="url(#pillSoftEdge)"
             />

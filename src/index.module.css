@@ -703,9 +703,9 @@
   background: conic-gradient(
       in rec2020 from var(--bg-angle),
       transparent,
-      var(--bg-color-a) 5%,
-      var(--bg-color-b) 30%,
-      transparent 60%
+      var(--bg-color-a) 25%,
+      var(--bg-color-b) 45%,
+      transparent 65%
     )
     border-box;
   background-position: center center;
