@@ -500,7 +500,7 @@
         0 0 0.75px 0 color-mix(in srgb, var(--ui-foreground) 12%, transparent)
           inset;
       position: absolute;
-      padding: 0.125rlh 0.35rlh;
+      padding: 0.125rlh 0.4rlh;
       border-radius: 0.75rlh;
       corner-shape: superellipse(1.4);
       font-size: 0.6rlh;
@@ -508,7 +508,7 @@
       text-transform: uppercase;
       color: var(--ui-secondary);
       text-align: center;
-      backdrop-filter: blur(10px);
+      backdrop-filter: blur(4px);
     }
   }
 }
@@ -644,6 +644,127 @@
   height: 128px;
   overflow: hidden;
 }
+
+/* ── Chatbox sequence ─────────────────────────────────────── */
+
+@property --chatbox-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes chatboxSpin {
+  to {
+    --chatbox-angle: 360deg;
+  }
+}
+
+.chatboxWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding-inline: 1rlh;
+}
+
+.chatboxOuter {
+  position: relative;
+  border-radius: 999px;
+  padding: 1px;
+  isolation: isolate;
+  overflow: clip;
+  width: 100%;
+}
+
+/* Static border fallback — always below the gradient layer */
+.chatboxOuter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--ui-border);
+  z-index: -1;
+}
+
+/* Animated gradient — fades in/out via opacity */
+.chatboxOuter::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  --chatbox-angle: 0deg;
+  background: conic-gradient(
+    from var(--chatbox-angle),
+    #a855f7,
+    #3b82f6,
+    #06b6d4,
+    #a855f7
+  );
+  animation: chatboxSpin 1.8s linear infinite;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: 0;
+}
+
+.chatboxGradient::before {
+  opacity: 1;
+}
+
+.chatboxErrorBorder::before {
+  background: conic-gradient(
+    from var(--chatbox-angle),
+    #ef4444,
+    #f97316,
+    #ef4444
+  );
+  opacity: 1;
+}
+
+.chatboxInner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 14px;
+  background: var(--ui-background);
+  border-radius: 999px;
+}
+
+.chatboxPlaceholder {
+  flex: 1;
+  font-size: 0.7rlh;
+  color: var(--ui-tertiary);
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chatboxSend {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.chatboxErrorLabel {
+  font-size: 0.62rlh;
+  color: #ef4444;
+  letter-spacing: 0.03em;
+  user-select: none;
+}
+
+/* ── End chatbox sequence ─────────────────────────────────── */
 
 @keyframes shaderParallaxShift {
   from {

@@ -7,6 +7,7 @@ import DotIcon, {
   type StateKey,
 } from "#/components/DotIcon/DotIcon";
 import AIChat from "#/components/sequence/AIChat";
+import Chatbox from "#/components/sequence/Chatbox";
 import styles from "../../index.module.css";
 import { isDevStateEnabled } from "#/env";
 
@@ -227,10 +228,7 @@ export const Route = createFileRoute("/_shell/")({
 
           <AIChat data-label="Chat" />
 
-          <div
-            className={`${styles.column} ${styles.card}`}
-            data-label="Gradient"
-          ></div>
+          <Chatbox data-label="Chatbox" />
           <div
             className={`${styles.column} ${styles.card}`}
             data-label="Color"
