@@ -54,37 +54,70 @@ const Chatbox = ({ "data-label": label }: { "data-label"?: string }) => {
     .join(" ");
 
   return (
-    <div className={`${styles.column} ${styles.card}`} data-label={label}>
-      <motion.div
-        className={styles.chatboxWrap}
-        initial={{ opacity: 0, y: 5 }}
-        animate={wrapVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 5 }}
-        transition={{ duration: 0.3, ease: "easeOut" }}
-      >
-        <div className={outerClass}>
-          <div className={styles.chatboxInner}>
-            <span className={styles.chatboxPlaceholder}>Ask anything…</span>
-            <motion.button
+    <>
+      <div className={`${styles.column} ${styles.card}`} data-label={label}>
+        <motion.div
+          className={styles.chatbox}
+          initial={{ opacity: 0, y: 5 }}
+          animate={wrapVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 5 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+        >
+          <span className={styles.chatboxInner}>
+            Ask anything
+            <motion.div
               className={styles.chatboxSend}
               animate={isPressed ? { scale: 0.82 } : { scale: 1 }}
               transition={{ duration: 0.1, ease: "easeInOut" }}
             >
               <DotIcon size={20} state={iconState} grid={4} />
-            </motion.button>
-          </div>
-        </div>
+            </motion.div>
+          </span>
+          <div className={styles.chatboxGradient}></div>
+        </motion.div>
         <motion.span
-          className={styles.chatboxErrorLabel}
+          className={styles.chatboxError}
           initial={{ opacity: 0, y: -4 }}
-          animate={
-            isError ? { opacity: 1, y: 0 } : { opacity: 0, y: -4 }
-          }
+          animate={isError ? { opacity: 1, y: 0 } : { opacity: 0, y: -4 }}
           transition={{ duration: 0.22, ease: "easeOut" }}
         >
           Error, not connected
         </motion.span>
-      </motion.div>
-    </div>
+      </div>
+      <svg
+        style={{
+          position: "absolute",
+          width: 0,
+          height: 0,
+          overflow: "hidden",
+        }}
+      >
+        <defs>
+          <filter
+            id="pillSoftEdge"
+            x="-50%"
+            y="-50%"
+            width="200%"
+            height="200%"
+          >
+            <feGaussianBlur in="SourceGraphic" stdDeviation="0.11" />
+          </filter>
+          <mask id="pillRingMask" maskContentUnits="objectBoundingBox">
+            {/* White pill = visible area */}
+            <rect width="1" height="1" rx="0" fill="#fff" />
+            {/* Black inner pill = transparent center, blurred for soft edge */}
+            <rect
+              x="0.07"
+              y="0.16"
+              width="0.86"
+              height="0.68"
+              rx="0.1"
+              fill="#000"
+              filter="url(#pillSoftEdge)"
+            />
+          </mask>
+        </defs>
+      </svg>
+    </>
   );
 };
 

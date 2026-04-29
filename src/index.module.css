@@ -645,39 +645,97 @@
   overflow: hidden;
 }
 
-/* ── Chatbox sequence ─────────────────────────────────────── */
-
-@property --chatbox-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
-@keyframes chatboxSpin {
-  to {
-    --chatbox-angle: 360deg;
-  }
-}
-
-.chatboxWrap {
+/* .chatboxWrap {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding-inline: 1rlh;
+  width: round(100%, 2px);
+} */
+
+@property --border-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 0turn;
 }
 
+.chatbox {
+  width: round(25vmin, 2px);
+  height: round(5vmin, 2px);
+  border-radius: 1rlh;
+  corner-shape: superellipse(1.4);
+  overflow: clip;
+  display: grid;
+  background: var(--ui-border);
+}
+.chatboxInner {
+  grid-area: 1 / 1;
+  z-index: 1;
+  font-size: 0.7rlh;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  color: var(--ui-tertiary);
+  justify-content: space-between;
+  gap: 0.5rlh;
+  padding: 0 1rlh 0 1.5rlh;
+  white-space: nowrap;
+}
+.chatboxGradient {
+  border: solid 2px transparent;
+  grid-area: 1 / 1;
+  z-index: 0;
+  mask: url(#pillRingMask);
+  --border-angle: 0turn;
+  --main-bg: conic-gradient(
+    in lch from var(--border-angle),
+    hsl(210, 48%, 33%),
+    transparent 10%,
+    transparent 60%,
+    hsl(210, 48%, 33%) 95%
+  );
+  border-radius: 1rlh;
+  corner-shape: superellipse(1.4);
+  --gradient-border: conic-gradient(
+    in lch from var(--border-angle),
+    var(--ui-border) 25%,
+    hsl(205, 100%, 33%) 50%,
+    rgb(151, 235, 132) 95%,
+    var(--ui-border)
+  );
+  background:
+    var(--main-bg) padding-box,
+    var(--gradient-border) border-box;
+  background-position: center center;
+  animation: bg-spin 5s linear infinite;
+}
+.chatboxSend {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--ui-foreground);
+}
+.chatboxError {
+  color: var(--ui-tertiary);
+  margin-top: 0.5rlh;
+  font-size: 0.65rlh;
+}
+@keyframes bg-spin {
+  to {
+    --border-angle: 1turn;
+  }
+}
+/* 
 .chatboxOuter {
   position: relative;
   border-radius: 999px;
   padding: 1px;
   isolation: isolate;
   overflow: clip;
-  width: 100%;
+  width: round(100%, 2px);
 }
 
-/* Static border fallback — always below the gradient layer */
+
 .chatboxOuter::after {
   content: "";
   position: absolute;
@@ -687,7 +745,7 @@
   z-index: -1;
 }
 
-/* Animated gradient — fades in/out via opacity */
+
 .chatboxOuter::before {
   content: "";
   position: absolute;
@@ -727,7 +785,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 6px 6px 14px;
+  height: round(5vmin, 2px);
   background: var(--ui-background);
   border-radius: 999px;
 }
@@ -762,7 +820,7 @@
   color: #ef4444;
   letter-spacing: 0.03em;
   user-select: none;
-}
+} */
 
 /* ── End chatbox sequence ─────────────────────────────────── */
 
