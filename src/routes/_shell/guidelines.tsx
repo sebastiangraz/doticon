@@ -1,26 +1,48 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import styles from "../../index.module.css";
 import { ExposeProps } from "#/components/ExposeProps/ExposeProps";
 import DotIcon, {
   STATE_KEYS,
+  type StateKey,
   getStateUsage,
 } from "#/components/DotIcon/DotIcon";
 
-const StateKeyList = () => {
+const StateKeyList = ({ activeKey }: { activeKey: StateKey }) => {
   const filteredStates = STATE_KEYS.filter((key) => key !== "dev");
   return (
-    <>
+    <span className={styles.stateList}>
       {filteredStates.map((key, i) => (
-        <span key={key}>
+        <span key={key} className={key === activeKey ? "highlight" : undefined}>
           {i === 0 ? "" : i === filteredStates.length - 1 ? ", or " : ", "}
           <strong>{key}</strong>
         </span>
       ))}
-    </>
+    </span>
   );
 };
 
 const GuidelinesPage = () => {
+  const statesToCycle = useMemo<StateKey[]>(
+    () => STATE_KEYS.filter((key) => key !== "dev"),
+    [],
+  );
+  const [stateIndex, setStateIndex] = useState(0);
+
+  useEffect(() => {
+    if (statesToCycle.length === 0) return;
+
+    const intervalId = window.setInterval(() => {
+      setStateIndex((i) => (i + 1) % statesToCycle.length);
+    }, 2000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [statesToCycle.length]);
+
+  const dynamicState: StateKey = statesToCycle[stateIndex] ?? "dormant";
+
   return (
     <main className={styles.prose}>
       <h1>Guidelines</h1>
@@ -34,11 +56,10 @@ const GuidelinesPage = () => {
       <h1>Properties</h1>
       <ul>
         <li>
-          <code>state</code> can be set to <StateKeyList />.
+          <code>state</code> can be set to{" "}
+          <StateKeyList activeKey={dynamicState} />.
           <ExposeProps className={styles.prop} ignoreProps={["grid", "size"]}>
-            <DotIcon size={24} state={"dormant"} grid={4} />
-            <DotIcon size={24} state={"compiling"} grid={4} />
-            <DotIcon size={24} state={"organizing"} grid={4} />
+            <DotIcon size={24} state={dynamicState} grid={4} />
           </ExposeProps>
         </li>
         <li>

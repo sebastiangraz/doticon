@@ -84,6 +84,14 @@
     padding: 0.05rlh 0.25rlh;
     border-radius: 0.25rlh;
   }
+  .stateList {
+    span strong {
+      color: var(--ui-secondary);
+    }
+    :global span.highlight strong {
+      color: var(--ui-foreground);
+    }
+  }
 }
 
 .controlsRow {
