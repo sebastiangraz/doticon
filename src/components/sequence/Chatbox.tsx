@@ -35,6 +35,8 @@ const ICON_FOR_STEP: Record<StepId, StateKey> = {
   end: "dormant",
 };
 
+type ChatboxStage = "idle" | "compiling" | "error";
+
 const Chatbox = ({ "data-label": label }: { "data-label"?: string }) => {
   const { id, isAtOrAfter } = useSequence(STEPS);
 
@@ -45,19 +47,21 @@ const Chatbox = ({ "data-label": label }: { "data-label"?: string }) => {
 
   const iconState = ICON_FOR_STEP[id];
 
-  const outerClass = [
-    styles.chatboxOuter,
-    isGradient ? styles.chatboxGradient : "",
-    isError ? styles.chatboxErrorBorder : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  // Drives bg/ring color + opacity vars in CSS via [data-stage="..."].
+  // "error" stays latched through fadeout/end so the red hues hold while
+  // the wrapper itself fades out via motion.
+  const stage: ChatboxStage = isError
+    ? "error"
+    : isGradient
+      ? "compiling"
+      : "idle";
 
   return (
     <>
       <div className={`${styles.column} ${styles.card}`} data-label={label}>
         <motion.div
           className={styles.chatbox}
+          data-stage={stage}
           initial={{ opacity: 0, y: 5 }}
           animate={wrapVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 5 }}
           transition={{ duration: 0.3, ease: "easeOut" }}

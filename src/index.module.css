@@ -658,14 +658,65 @@
   inherits: false;
   initial-value: 0turn;
 }
-
 @property --ring-angle {
   syntax: "<angle>";
   inherits: false;
   initial-value: 0turn;
 }
 
+/* Registering the color/opacity vars makes them transitionable so swapping
+   `data-stage` on .chatbox crossfades the gradient stops smoothly. They
+   inherit so .chatbox can drive both child layers from one place. */
+@property --bg-color-a {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --bg-color-b {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --bg-opacity {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+@property --ring-color-a {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --ring-color-b {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --ring-opacity {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
 .chatbox {
+  /* Idle defaults: layers fully transparent. Hues match the "compiling"
+     stage so the entry transition is a pure opacity fade with no color
+     drift; only the compiling→error transition crossfades hues. */
+  --bg-color-a: rgb(0, 154, 121);
+  --bg-color-b: hsl(210, 100%, 49%);
+  --bg-opacity: 0;
+  --ring-color-a: #1e91af;
+  --ring-color-b: #9eebff;
+  --ring-opacity: 0;
+
+  transition:
+    --bg-color-a 0.45s ease,
+    --bg-color-b 0.45s ease,
+    --bg-opacity 0.35s ease,
+    --ring-color-a 0.45s ease,
+    --ring-color-b 0.45s ease,
+    --ring-opacity 0.35s ease;
+
   width: round(25vmin, 2px);
   height: round(5vmin, 2px);
   border-radius: 1rlh;
@@ -674,6 +725,21 @@
   display: grid;
   background: light-dark(#fff, var(--ui-border));
 }
+
+.chatbox[data-stage="compiling"] {
+  --bg-opacity: 0.2;
+  --ring-opacity: 0.24;
+}
+
+.chatbox[data-stage="error"] {
+  --bg-color-a: oklch(0.62 0.22 25);
+  --bg-color-b: oklch(0.8 0.17 55);
+  --bg-opacity: 0.28;
+  --ring-color-a: oklch(0.65 0.22 25);
+  --ring-color-b: oklch(0.88 0.14 70);
+  --ring-opacity: 0.32;
+}
+
 .chatboxInner {
   grid-area: 1 / 1;
   z-index: 2;
@@ -690,10 +756,6 @@
 }
 
 .chatboxGradient {
-  --bg-color-a: rgb(0, 154, 121);
-  --bg-color-b: hsl(210, 100%, 49%);
-  --bg-opacity: 0.2;
-
   border: solid 2px transparent;
   grid-area: 1 / 1;
   z-index: 0;
@@ -714,10 +776,6 @@
 }
 
 .chatboxRing {
-  --ring-color-a: #1e91af;
-  --ring-color-b: #9eebff;
-  --ring-opacity: 0.24;
-
   border: solid 1.5px transparent;
   grid-area: 1 / 1;
   z-index: 1;
