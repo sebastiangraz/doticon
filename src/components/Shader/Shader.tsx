@@ -49,7 +49,7 @@ export const SHADER_TUNING = {
   /** Blob anchor orbit speed (higher = faster drifting blobs). */
   blobDriftScale: 0.11, // default: 0.11
   /** Keep blobs away from UV edges [0–0.5]. */
-  blobAreaInset: 0.35, // default: 0.12
+  blobAreaInset: 0.2, // default: 0.12
   /** Orbit radius in UV space [0–1]. */
   blobAreaRadius: 0.1, // default: 0.76
   /** Gaussian tightness `exp(-k * d²)` — higher = smaller, sharper blobs. */
@@ -81,7 +81,7 @@ export const SHADER_TUNING = {
    * Linear exposure multiplier applied before premultiplying (1 = neutral, >1 = brighter).
    * Useful to restore brightness lost when correcting premultiplied alpha output.
    */
-  colorExposure: 2, // default: 1.0
+  colorExposure: 2.5, // default: 1.0
   /**
    * Saturation multiplier in linear-light space (1 = neutral, >1 = more vivid, 0 = greyscale).
    * Restores vibrancy without affecting overall luminance.
@@ -107,8 +107,14 @@ export const SHADER_TUNING = {
    * Opacity ramps from 0 at `verticalMaskYBottom` to 1 at `verticalMaskYTop`.
    * Default is full-height linear: opaque at top, transparent at bottom.
    */
-  verticalMaskYBottom: 0.3,
+  verticalMaskYBottom: 0.2,
   verticalMaskYTop: 1,
+  /**
+   * Power applied to the vertical mask after smoothstep (1 = linear, >1 = aggressive falloff).
+   * Higher values push the low-opacity regions closer to zero while leaving the fully
+   * opaque top unchanged — effectively shortening the visible gradient band.
+   */
+  verticalMaskPower: 1,
 
   /** Blending space for all color mixes — see `COLOR_MIX_SPACE`. */
   colorMixSpace: COLOR_MIX_SPACE.SRGB,
@@ -158,6 +164,7 @@ uniform vec3 u_alphaShape;
 uniform vec2 u_alphaTrough;
 uniform float u_lumaToAlpha;
 uniform vec2 u_verticalMask;
+uniform float u_verticalMaskPower;
 uniform int u_colorMixSpace;
 
 const int MIX_SRGB = 0;
@@ -403,7 +410,7 @@ void main() {
 
   // Top = full opacity, bottom = 0 (linear in UV Y; WebGL origin is bottom-left).
   float vertMask = smoothstep(u_verticalMask.x, u_verticalMask.y, uv.y);
-  a *= vertMask;
+  a *= pow(vertMask, u_verticalMaskPower);
 
   // Premultiply alpha before output. WebGL's default premultipliedAlpha:true
   // means the browser compositor expects RGB already scaled by alpha — outputting
@@ -533,6 +540,7 @@ const applyShaderTuning = (
   );
   set1f("u_lumaToAlpha", tuning.colorLuminanceToAlpha);
   set2f("u_verticalMask", tuning.verticalMaskYBottom, tuning.verticalMaskYTop);
+  set1f("u_verticalMaskPower", tuning.verticalMaskPower);
 
   const uMix = loc("u_colorMixSpace");
   if (uMix) gl.uniform1i(uMix, tuning.colorMixSpace);

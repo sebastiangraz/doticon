@@ -3,18 +3,21 @@
   pointer-events: none;
   z-index: -1;
   top: 0;
-  left: 0;
+  left: 50%;
   width: 100%;
   overflow: clip;
   height: 100vh;
   min-height: 1080px;
+  min-width: 1080px;
+  transform: translateX(-50%);
+  transform-origin: center center;
   opacity: 1;
   transition: opacity 0.35s ease-out;
   /* background: linear-gradient(to bottom, #e1f0e1, #fff); */
-  background: linear-gradient(
+  /* background: linear-gradient(
     light-dark(#e1f0e1, #021c02),
-    light-dark(#ffffff00, #06070800)
-  );
+    light-dark(#ffffff00, #06070800) 70%
+  ); */
 }
 
 .resizeHidden {
