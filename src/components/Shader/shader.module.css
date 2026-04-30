@@ -23,3 +23,7 @@
   opacity: 0;
   transition: none;
 }
+
+:global :root:has(#theme-mode-toggle:checked) canvas {
+  opacity: 0.4;
+}
