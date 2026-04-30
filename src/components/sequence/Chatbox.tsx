@@ -52,7 +52,10 @@ const Chatbox = ({ "data-label": label }: { "data-label"?: string }) => {
 
   return (
     <>
-      <div className={`${styles.column} ${styles.card}`} data-label={label}>
+      <div
+        className={`${styles.column} ${styles.card} ${styles.chatboxCard}`}
+        data-label={label}
+      >
         <motion.div
           className={styles.chatbox}
           data-stage={stage}

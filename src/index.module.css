@@ -716,6 +716,16 @@
   overflow: clip;
   display: grid;
   background: light-dark(#fff, var(--ui-border));
+  box-shadow:
+    0 20px 30px -1.5px light-dark(hsla(0, 0%, 0%, 0.05), hsla(0, 0%, 0%, 0.2)),
+    0 4px 8px 0px light-dark(hsla(0, 0%, 0%, 0.03), hsla(0, 0%, 0%, 0.1));
+}
+
+.chatboxCard {
+  background: light-dark(
+    #fff3,
+    color-mix(in srgb, var(--ui-foreground) 2%, transparent)
+  );
 }
 
 .chatbox[data-stage="compiling"] {
