@@ -228,11 +228,24 @@ export const Route = createFileRoute("/_shell/")({
 
           <AIChat data-label="Chat" />
 
-          <Chatbox data-label="Chatbox" />
+          <Chatbox data-label="Input" />
           <div
-            className={`${styles.column} ${styles.card}`}
+            className={`${styles.column} ${styles.card} ${styles.cardColor}`}
             data-label="Color"
-          ></div>
+          >
+            <DotIcon
+              size={32}
+              state={iconState}
+              grid={7}
+              color="var(--ui-secondary)"
+            />
+            <DotIcon
+              size={32}
+              state={iconState}
+              grid={7}
+              color="var(--ui-primary)"
+            />
+          </div>
         </div>
 
         <ExposeProps className={`${styles.grid}`} ignoreProps={["size"]}>

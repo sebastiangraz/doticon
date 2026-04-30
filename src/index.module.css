@@ -565,7 +565,11 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 0.65rlh;
-
+  mask-image: radial-gradient(
+    ellipse closest-side at center,
+    #000 20%,
+    #0001 120%
+  );
   th,
   td {
     height: 1.65rlh;
@@ -641,6 +645,14 @@
   & svg {
     mix-blend-mode: plus-lighter;
   }
+}
+
+.cardColor {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+  gap: 0.75rlh;
 }
 
 .cardTable {
