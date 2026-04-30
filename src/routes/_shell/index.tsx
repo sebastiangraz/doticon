@@ -237,7 +237,7 @@ export const Route = createFileRoute("/_shell/")({
               size={32}
               state={iconState}
               grid={7}
-              color="var(--ui-secondary)"
+              color="var(--ui-tertiary)"
             />
             <DotIcon
               size={32}
@@ -245,6 +245,20 @@ export const Route = createFileRoute("/_shell/")({
               grid={7}
               color="var(--ui-primary)"
             />
+            <DotIcon size={32} state={iconState} grid={7} color="#449735" />
+            <DotIcon
+              size={20}
+              state={iconState}
+              grid={4}
+              color="var(--ui-tertiary)"
+            />
+            <DotIcon
+              size={20}
+              state={iconState}
+              grid={4}
+              color="var(--ui-primary)"
+            />
+            <DotIcon size={20} state={iconState} grid={4} color="#449735" />
           </div>
         </div>
 

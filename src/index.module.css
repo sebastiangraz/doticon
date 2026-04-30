@@ -648,11 +648,11 @@
 }
 
 .cardColor {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: row;
-  gap: 0.75rlh;
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  justify-items: center;
+  align-content: center;
+  gap: 1.5rlh;
 }
 
 .cardTable {
