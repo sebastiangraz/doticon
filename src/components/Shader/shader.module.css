@@ -13,11 +13,10 @@
   transform-origin: center center;
   opacity: 1;
   transition: opacity 0.35s ease-out;
-  /* background: linear-gradient(to bottom, #e1f0e1, #fff); */
-  /* background: linear-gradient(
-    light-dark(#e1f0e1, #021c02),
-    light-dark(#ffffff00, #06070800) 70%
-  ); */
+  background: linear-gradient(
+    light-dark(#e3fae3, #021c02) 0%,
+    light-dark(#ffffff, #021c0200) 50%
+  );
 }
 
 .resizeHidden {

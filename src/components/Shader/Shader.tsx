@@ -107,7 +107,7 @@ export const SHADER_TUNING = {
    * Opacity ramps from 0 at `verticalMaskYBottom` to 1 at `verticalMaskYTop`.
    * Default is full-height linear: opaque at top, transparent at bottom.
    */
-  verticalMaskYBottom: 0.2,
+  verticalMaskYBottom: 0.5,
   verticalMaskYTop: 1,
   /**
    * Power applied to the vertical mask after smoothstep (1 = linear, >1 = aggressive falloff).
