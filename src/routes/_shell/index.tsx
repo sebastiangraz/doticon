@@ -233,6 +233,37 @@ export const Route = createFileRoute("/_shell/")({
             className={`${styles.column} ${styles.card} ${styles.cardColor}`}
             data-label="Color"
           >
+            <svg
+              width="0"
+              height="0"
+              style={{ position: "absolute", overflow: "hidden" }}
+              aria-hidden
+            >
+              <defs>
+                <linearGradient
+                  id="dotGradient"
+                  gradientUnits="userSpaceOnUse"
+                  x1="0"
+                  y1="10"
+                  x2="0"
+                  y2="90"
+                >
+                  <stop offset="0%" stopColor="#9EEBFF" />
+                  <stop offset="100%" stopColor="hsl(192, 64.90%, 48.00%)" />
+                </linearGradient>
+                <linearGradient
+                  id="dotGradientAlt"
+                  gradientUnits="userSpaceOnUse"
+                  x1="0"
+                  y1="10"
+                  x2="0"
+                  y2="90"
+                >
+                  <stop offset="0%" stopColor="#449735" />
+                  <stop offset="100%" stopColor="hsl(167, 51.10%, 74.30%)" />
+                </linearGradient>
+              </defs>
+            </svg>
             <DotIcon
               size={32}
               state={iconState}
@@ -246,6 +277,9 @@ export const Route = createFileRoute("/_shell/")({
               color="var(--ui-primary)"
             />
             <DotIcon size={32} state={iconState} grid={7} color="#449735" />
+            <div className={styles.dotGradient}>
+              <DotIcon size={32} state={iconState} grid={7} />
+            </div>
             <DotIcon
               size={20}
               state={iconState}
@@ -259,6 +293,9 @@ export const Route = createFileRoute("/_shell/")({
               color="var(--ui-primary)"
             />
             <DotIcon size={20} state={iconState} grid={4} color="#449735" />
+            <div className={styles.dotGradientAlt}>
+              <DotIcon size={20} state={iconState} grid={4} />
+            </div>
           </div>
         </div>
 

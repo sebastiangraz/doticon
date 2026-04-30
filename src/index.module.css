@@ -649,10 +649,26 @@
 
 .cardColor {
   display: grid;
-  grid-template-columns: repeat(3, auto);
+  grid-template-columns: repeat(4, auto);
   justify-items: center;
   align-content: center;
   gap: 1.5rlh;
+}
+
+.dotGradient {
+  display: contents;
+}
+
+.dotGradient circle {
+  fill: url(#dotGradient);
+}
+
+.dotGradientAlt {
+  display: contents;
+}
+
+.dotGradientAlt circle {
+  fill: url(#dotGradientAlt);
 }
 
 .cardTable {
