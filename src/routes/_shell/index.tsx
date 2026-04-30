@@ -235,44 +235,41 @@ export const Route = createFileRoute("/_shell/")({
           ></div>
         </div>
 
-        <ExposeProps
-          className={`${styles.grid}`}
-          ignoreProps={["grid", "size"]}
-        >
+        <ExposeProps className={`${styles.grid}`} ignoreProps={["size"]}>
           <DotIcon size={72} state={"dormant"} />
-          <DotIcon size={24} state={"dormant"} />
+          <DotIcon size={24} state={"dormant"} grid={4} />
           <DotIcon size={16} state={"dormant"} grid={3} />
 
           <DotIcon size={72} state={"hover"} />
-          <DotIcon size={24} state={"hover"} />
+          <DotIcon size={24} state={"hover"} grid={4} />
           <DotIcon size={16} state={"hover"} grid={3} />
 
           <DotIcon size={72} state={"thinking"} />
-          <DotIcon size={24} state={"thinking"} />
+          <DotIcon size={24} state={"thinking"} grid={4} />
           <DotIcon size={16} state={"thinking"} grid={3} />
 
           <DotIcon size={72} state={"compiling"} />
-          <DotIcon size={24} state={"compiling"} />
+          <DotIcon size={24} state={"compiling"} grid={4} />
           <DotIcon size={16} state={"compiling"} grid={3} />
 
           <DotIcon size={72} state={"organizing"} />
-          <DotIcon size={24} state={"organizing"} />
+          <DotIcon size={24} state={"organizing"} grid={4} />
           <DotIcon size={16} state={"organizing"} grid={3} />
 
           <DotIcon size={72} state={"loading"} />
-          <DotIcon size={24} state={"loading"} />
+          <DotIcon size={24} state={"loading"} grid={4} />
           <DotIcon size={16} state={"loading"} grid={3} />
 
           <DotIcon size={72} state={"indexing"} />
-          <DotIcon size={24} state={"indexing"} />
+          <DotIcon size={24} state={"indexing"} grid={4} />
           <DotIcon size={16} state={"indexing"} grid={3} />
 
           <DotIcon size={72} state={"success"} />
-          <DotIcon size={24} state={"success"} />
+          <DotIcon size={24} state={"success"} grid={4} />
           <DotIcon size={16} state={"success"} grid={3} />
 
           <DotIcon size={72} state={"error"} />
-          <DotIcon size={24} state={"error"} />
+          <DotIcon size={24} state={"error"} grid={4} />
           <DotIcon size={16} state={"error"} grid={3} />
         </ExposeProps>
       </>
