@@ -43,7 +43,6 @@
     & > * {
       display: flex;
       flex-direction: row;
-      /* flex-wrap: wrap; */
       justify-content: flex-start;
       align-items: center;
     }
@@ -85,18 +84,29 @@
     padding: 0.05rlh 0.25rlh;
     border-radius: 0.25rlh;
   }
+  pre {
+    font-size: inherit;
+    font-family: inherit;
+  }
+  .stateList {
+    span strong {
+      color: var(--ui-secondary);
+    }
+    :global span.highlight strong {
+      color: var(--ui-foreground);
+    }
+  }
 }
 
 .controlsRow {
-  /* max-width: 720px; */
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  column-gap: 1rlh;
+  column-gap: 2rlh;
   row-gap: 2rlh;
-  padding-bottom: 3rlh;
+  margin-bottom: 3rlh;
 }
 .navigation {
   width: 100%;
@@ -182,18 +192,20 @@
   display: flex;
   flex-wrap: wrap;
   overflow: clip;
-  /* filter: drop-shadow(0 0 1px red); */
   background: transparent;
-  border-radius: 0.25rlh;
+  border-radius: 1.75rlh;
+  max-width: 652px;
+  corner-shape: superellipse(1.4);
   overflow: hidden;
   outline: 1px var(--ui-border) solid;
-  /* clip-path: xywh(0 0 100% 100% round 0.25rlh); */
   outline-offset: -1px;
+  flex: 1 1 0%;
+  min-width: 240px;
 }
 
 .stateButton {
-  flex: 1 1 0;
-  min-width: calc(100% / 6);
+  flex: 1 1 0%;
+  min-width: unset;
   padding: 0.65rem 0.85rlh;
   font-size: 0.65rlh;
   font-family: inherit;
@@ -215,6 +227,9 @@
   user-select: none;
   &:hover {
     background: var(--ui-border);
+  }
+  @media (min-width: 768px) {
+    min-width: calc(100% / 5);
   }
 }
 
@@ -267,7 +282,7 @@
   border-radius: 999px;
   background: light-dark(var(--ui-background), var(--ui-foreground));
   box-shadow: 0 0 0 1px var(--ui-border);
-  margin-top: -7px; /* center thumb on 4px track */
+  margin-top: -7px;
 }
 
 .gridSlider:focus-visible {
@@ -279,8 +294,8 @@
 }
 
 .gridValue {
-  min-width: 1.2em;
-  text-align: right;
+  min-width: 6ch;
+  text-align: center;
 }
 
 .toggle {
@@ -385,6 +400,44 @@
   flex-shrink: 0;
 }
 
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  row-gap: 2rlh;
+
+  & > div {
+    display: flex;
+    padding-inline: 1rlh;
+    padding-bottom: 1rlh;
+    min-height: 4rlh;
+    align-items: start;
+    justify-content: end;
+    background-position: calc(1rlh - 1px) calc(1rlh - 1px);
+    border-bottom: 1px solid var(--ui-border);
+    border-left: 1px solid var(--ui-border);
+    flex-direction: column;
+    row-gap: 0.5rlh;
+
+    & > div {
+      display: flex;
+    }
+
+    &:nth-child(3n) {
+      border-right: 1px solid var(--ui-border);
+    }
+
+    span {
+      color: var(--ui-tertiary);
+      font-size: 0.7rlh;
+    }
+
+    :global(.propValue span) {
+      color: var(--ui-secondary);
+    }
+  }
+}
+
 .prop {
   --sizeX: 1rlh;
   --sizeY: 1rlh;
@@ -425,37 +478,66 @@
 
 .inSitu {
   gap: 0;
-  border: 1px solid var(--ui-border);
+  outline: 1px var(--ui-border) solid;
+  outline-offset: -1px;
+  display: grid;
+  overflow: clip;
+  grid-template-columns: repeat(2, 1fr);
+  margin-bottom: 3rlh;
+  .card {
+    &::before {
+      content: attr(data-label);
+      z-index: 1;
+      mix-blend-mode: normal;
+      display: block;
+      width: fit-content;
+      height: fit-content;
+      inset: 0.75rlh;
+      background: color-mix(in srgb, var(--ui-foreground) 8%, transparent);
+      box-shadow:
+        0 0 1.5px 1px color-mix(in srgb, var(--ui-foreground) 2%, transparent)
+          inset,
+        0 0 0.75px 0 color-mix(in srgb, var(--ui-foreground) 12%, transparent)
+          inset;
+      position: absolute;
+      padding: 0.125rlh 0.4rlh;
+      border-radius: 0.75rlh;
+      corner-shape: superellipse(1.4);
+      font-size: 0.6rlh;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ui-secondary);
+      text-align: center;
+      backdrop-filter: blur(4px);
+    }
+  }
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
-/* .inSituGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border: 1px solid var(--ui-border);
-  border-radius: 8px;
-  overflow: hidden;
-  width: 100%;
-} */
+:global(:root:has(#theme-mode-toggle:checked)) .inSitu .card::before {
+  mix-blend-mode: plus-lighter;
+  background: color-mix(in srgb, var(--ui-foreground) 8%, transparent);
+}
 
 .card {
-  /* padding: 1.5rlh; */
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 180px;
-  border-right: 1px solid var(--ui-border);
+  min-height: 208px;
+  box-shadow:
+    -0.85px 0 0 0 var(--ui-border),
+    0 -0.85px 0 0 var(--ui-border);
   overflow: clip;
-  &:last-child {
-    border-right: none;
-  }
 }
-
-/* — Button — */
 
 .button {
   display: inline-flex;
-  align-items: flex-start;
+  align-items: center;
+
   gap: 12px;
   padding: 0.5rlh 0.85rlh;
   font-size: 0.75rlh;
@@ -464,6 +546,7 @@
   text-box-edge: cap alphabetic;
   text-box-trim: trim-both;
   letter-spacing: 0.04em;
+  line-height: 1;
   border: 1px solid var(--ui-border);
   border-radius: 99em;
   background: transparent;
@@ -478,13 +561,15 @@
   }
 }
 
-/* — Table — */
-
 .table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.65rlh;
-
+  mask-image: radial-gradient(
+    ellipse closest-side at center,
+    #000 20%,
+    #0001 120%
+  );
   th,
   td {
     height: 1.65rlh;
@@ -528,9 +613,13 @@
 .user {
   align-self: flex-end;
   background: var(--ui-border);
-  border-radius: 12px 12px 2px 12px;
+  border-radius: 1rlh 1rlh 2px 1rlh;
+  box-shadow:
+    0 0 1.5px 1px color-mix(in srgb, var(--ui-foreground) 2%, transparent) inset,
+    0 0 0.75px 0 color-mix(in srgb, var(--ui-foreground) 12%, transparent) inset;
   max-width: 85%;
   color: var(--ui-secondary);
+  corner-shape: superellipse(1.4);
 }
 
 .bubble {
@@ -539,6 +628,7 @@
   gap: 0.5rlh;
   padding: 8px 11px;
   font-size: 0.7rlh;
+  max-width: 70%;
   & > *:not(svg) {
     color: var(--ui-secondary);
   }
@@ -557,7 +647,228 @@
   }
 }
 
-/* Scroll-linked parallax for the WebGL backdrop (see _shell.tsx). */
+.cardColor {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  justify-items: center;
+  align-content: center;
+  gap: 1.5rlh;
+}
+
+.dotGradient {
+  display: contents;
+}
+
+.dotGradient circle {
+  fill: url(#dotGradient);
+}
+
+.dotGradientAlt {
+  display: contents;
+}
+
+.dotGradientAlt circle {
+  fill: url(#dotGradientAlt);
+}
+
+.cardTable {
+  height: 128px;
+  overflow: hidden;
+}
+
+@property --bg-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0turn;
+}
+@property --ring-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0turn;
+}
+
+/* Registering the color/opacity vars makes them transitionable so swapping
+   `data-stage` on .chatbox crossfades the gradient stops smoothly. They
+   inherit so .chatbox can drive both child layers from one place. */
+@property --bg-color-a {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --bg-color-b {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --bg-opacity {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+@property --ring-color-a {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --ring-color-b {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --ring-opacity {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+.chatbox {
+  /* Idle defaults: layers fully transparent. Hues match the "compiling"
+     stage so the entry transition is a pure opacity fade with no color
+     drift; only the compiling→error transition crossfades hues. */
+  --bg-color-a: var(--ui-foreground);
+  --bg-color-b: var(--ui-foreground);
+  --ring-color-a: var(--ui-border);
+  --ring-color-b: var(--ui-border);
+  --bg-opacity: 0.04;
+  --ring-opacity: 0.8;
+
+  transition:
+    --bg-color-a 0.45s ease,
+    --bg-color-b 0.45s ease,
+    --bg-opacity 0.35s ease,
+    --ring-color-a 0.45s ease,
+    --ring-color-b 0.45s ease,
+    --ring-opacity 0.35s ease;
+
+  width: round(70%, 2px);
+  height: round(3.5rlh, 2px);
+  border-radius: 1rlh;
+  corner-shape: superellipse(1.4);
+  overflow: clip;
+  display: grid;
+  background: light-dark(#fff, var(--ui-border));
+}
+
+.chatboxCard {
+  background: light-dark(
+    #fff3,
+    color-mix(in srgb, var(--ui-foreground) 2%, transparent)
+  );
+}
+
+.chatbox[data-stage="compiling"] {
+  --bg-color-a: hsl(167, 100%, 30%);
+  --bg-color-b: hsl(210, 100%, 49%);
+  --ring-color-a: hsl(192, 71%, 40%);
+  --ring-color-b: hsl(192, 100%, 81%);
+  --bg-opacity: 0.2;
+  --ring-opacity: 0.24;
+}
+
+.chatbox[data-stage="error"] {
+  --bg-color-a: hsla(348, 100%, 48%, 0.28);
+  --bg-color-b: hsla(27, 100%, 55%, 0.32);
+  --ring-color-a: hsla(348, 100%, 61%, 0.32);
+  --ring-color-b: hsla(15, 100%, 48%, 0.32);
+  --bg-opacity: 0.28;
+  --ring-opacity: 0.32;
+}
+
+.chatboxInner {
+  grid-area: 1 / 1;
+  z-index: 2;
+  font-size: 0.7rlh;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  color: var(--ui-tertiary);
+  justify-content: space-between;
+  gap: 0.5rlh;
+  padding: 0 0 0 1.5rlh;
+  /* white-space: nowrap; */
+  line-height: 1.2;
+}
+
+.chatboxGradient {
+  border: solid 2px transparent;
+  grid-area: 1 / 1;
+  z-index: 0;
+  mask: url(#pillRingMask);
+  border-radius: 1rlh;
+  corner-shape: superellipse(1.4);
+  background: conic-gradient(
+      in rec2020 from var(--bg-angle),
+      transparent,
+      var(--bg-color-a) 25%,
+      var(--bg-color-b) 45%,
+      transparent 65%
+    )
+    border-box;
+  background-position: center center;
+  opacity: var(--bg-opacity);
+  animation: chatboxBgSpin 5s linear infinite;
+  animation-play-state: running;
+  [data-stage="error"] & {
+    animation-play-state: paused;
+  }
+}
+
+.chatboxRing {
+  border: solid 1.5px transparent;
+  grid-area: 1 / 1;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: 1rlh;
+  corner-shape: superellipse(1.4);
+  background: conic-gradient(
+      in lch from var(--ring-angle),
+      var(--ui-border),
+      var(--ring-color-a) 20%,
+      var(--ring-color-b) 57%,
+      var(--ui-border) 60%
+    )
+    border-box;
+  mask:
+    linear-gradient(#000 0 0) padding-box,
+    linear-gradient(#000 0 0) border-box;
+  mask-composite: exclude;
+  opacity: var(--ring-opacity);
+  animation: chatboxRingSpin 5s linear infinite;
+  [data-stage="error"] & {
+    animation-play-state: paused;
+  }
+}
+
+.chatboxSend {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--ui-foreground);
+  border-left: 1.5px solid
+    color-mix(in srgb, var(--ui-foreground) 4%, transparent);
+  aspect-ratio: 1 / 1;
+  height: 100%;
+  display: flex;
+  padding-right: 0.15rlh;
+  align-items: center;
+  justify-content: center;
+}
+.chatboxError {
+  color: var(--ui-tertiary);
+  margin-top: 0.5rlh;
+  font-size: 0.65rlh;
+}
+@keyframes chatboxBgSpin {
+  to {
+    --bg-angle: 1turn;
+  }
+}
+@keyframes chatboxRingSpin {
+  to {
+    --ring-angle: 1turn;
+  }
+}
+
 @keyframes shaderParallaxShift {
   from {
     transform: translate3d(0, 0, 0);
@@ -576,7 +887,6 @@
 
 @supports (animation-timeline: scroll()) {
   .shaderParallax {
-    /* Duration is ignored for scroll timelines; any non-zero value satisfies the shorthand. */
     animation: shaderParallaxShift 1s linear both;
     animation-timeline: scroll();
   }

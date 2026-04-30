@@ -6,12 +6,19 @@ import DotIcon, {
   STATE_KEYS,
   type StateKey,
 } from "#/components/DotIcon/DotIcon";
+import AIChat from "#/components/sequence/AIChat";
+import Chatbox from "#/components/sequence/Chatbox";
 import styles from "../../index.module.css";
+import { isDevStateEnabled } from "#/env";
 
 export const Route = createFileRoute("/_shell/")({
   component: () => {
-    const GRID_SIZE_OPTIONS = [3, 4, 7] as const;
-    const [icon3dState, setIcon3dState] = useState<StateKey>("dormant");
+    const defaultGridSizeOptions = [3, 4, 7];
+    const devGridSizeOptions = [3, 4, 5, 6, 7, 8, 10];
+    const GRID_SIZE_OPTIONS = isDevStateEnabled
+      ? devGridSizeOptions
+      : defaultGridSizeOptions;
+    const [iconState, seticonState] = useState<StateKey>("dormant");
     const [gridSize, setGridSize] = useState(4);
     const [gridSizeInput, setGridSizeInput] = useState(gridSize);
     const previewRef = useRef<HTMLDivElement | null>(null);
@@ -63,7 +70,7 @@ export const Route = createFileRoute("/_shell/")({
         <div className={styles.controlsRow}>
           <div className={styles.previewRow}>
             <div className={styles.previewWrap} ref={previewRef}>
-              <DotIcon size={100} state={icon3dState} grid={gridSize} />
+              <DotIcon size={100} state={iconState} grid={gridSize} />
 
               <button
                 type="button"
@@ -73,16 +80,16 @@ export const Route = createFileRoute("/_shell/")({
                 {didCopy ? "COPIED" : "COPY"}
               </button>
             </div>
-            <DotIcon size={20} state={icon3dState} grid={gridSize} />
+            <DotIcon size={20} state={iconState} grid={gridSize} />
           </div>
           <div className={styles.stateButtons}>
             {STATE_KEYS.map((key: StateKey) => {
-              const active = icon3dState === key;
+              const active = iconState === key;
               return (
                 <button
                   key={key}
                   type="button"
-                  onClick={() => setIcon3dState(key)}
+                  onClick={() => seticonState(key)}
                   className={styles.stateButton}
                   data-active={active ? "true" : "false"}
                 >
@@ -116,16 +123,26 @@ export const Route = createFileRoute("/_shell/")({
           </label>
         </div>
         <div className={`${styles.row} ${styles.inSitu}`}>
-          <div className={`${styles.column} ${styles.card}`}>
+          <div className={`${styles.column} ${styles.card}`} data-label="CTA">
             <button type="button" className={styles.button}>
-              <DotIcon size={16} state={icon3dState} grid={4} />
+              <DotIcon size={16} state={iconState} grid={4} />
               Generate
             </button>
           </div>
 
-          <div className={`${styles.column} ${styles.card}`}>
+          <div
+            className={`${styles.column} ${styles.card} ${styles.cardTable}`}
+            data-label="Table"
+          >
             <table className={styles.table}>
               <tbody>
+                <tr>
+                  <td />
+                  <td />
+                  <td />
+                  <td />
+                  <td />
+                </tr>
                 <tr>
                   <td />
                   <td />
@@ -152,7 +169,7 @@ export const Route = createFileRoute("/_shell/")({
                   <td>Invoice #041</td>
                   <td>
                     <span className={styles.cell}>
-                      <DotIcon size={12} state={icon3dState} grid={3} />
+                      <DotIcon size={12} state={iconState} grid={3} />
                       Active
                     </span>
                   </td>
@@ -191,63 +208,134 @@ export const Route = createFileRoute("/_shell/")({
                   <td />
                   <td />
                 </tr>
+                <tr>
+                  <td />
+                  <td />
+                  <td />
+                  <td />
+                  <td />
+                </tr>
               </tbody>
             </table>
           </div>
 
-          <div className={`${styles.column} ${styles.card}`}>
-            <div className={styles.chat}>
-              <div className={`${styles.bubble} ${styles.user}`}>
-                Summarise my last three files
-              </div>
-              <div className={`${styles.bubble}`}>
-                <DotIcon size={16} state={icon3dState} grid={4} />
-                <div>Here are the highlights from your last three files…</div>
-              </div>
-            </div>
-          </div>
-
           <div
             className={`${styles.column} ${styles.card} ${styles.cardSocial}`}
+            data-label="Social"
           >
-            <DotIcon size={100} state={icon3dState} grid={7} />
+            <DotIcon size={100} state={iconState} grid={7} />
+          </div>
+
+          <AIChat data-label="Chat" />
+
+          <Chatbox data-label="Input" />
+          <div
+            className={`${styles.column} ${styles.card} ${styles.cardColor}`}
+            data-label="Color"
+          >
+            <svg
+              width="0"
+              height="0"
+              style={{ position: "absolute", overflow: "hidden" }}
+              aria-hidden
+            >
+              <defs>
+                <linearGradient
+                  id="dotGradient"
+                  gradientUnits="userSpaceOnUse"
+                  x1="0"
+                  y1="10"
+                  x2="0"
+                  y2="90"
+                >
+                  <stop offset="0%" stopColor="#9EEBFF" />
+                  <stop offset="100%" stopColor="hsl(192, 64.90%, 48.00%)" />
+                </linearGradient>
+                <linearGradient
+                  id="dotGradientAlt"
+                  gradientUnits="userSpaceOnUse"
+                  x1="0"
+                  y1="10"
+                  x2="0"
+                  y2="90"
+                >
+                  <stop offset="0%" stopColor="#449735" />
+                  <stop offset="100%" stopColor="hsl(167, 51.10%, 74.30%)" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <DotIcon
+              size={32}
+              state={iconState}
+              grid={7}
+              color="var(--ui-tertiary)"
+            />
+            <DotIcon
+              size={32}
+              state={iconState}
+              grid={7}
+              color="var(--ui-primary)"
+            />
+            <DotIcon size={32} state={iconState} grid={7} color="#449735" />
+            <div className={styles.dotGradient}>
+              <DotIcon size={32} state={iconState} grid={7} />
+            </div>
+            <DotIcon
+              size={20}
+              state={iconState}
+              grid={4}
+              color="var(--ui-tertiary)"
+            />
+            <DotIcon
+              size={20}
+              state={iconState}
+              grid={4}
+              color="var(--ui-primary)"
+            />
+            <DotIcon size={20} state={iconState} grid={4} color="#449735" />
+            <div className={styles.dotGradientAlt}>
+              <DotIcon size={20} state={iconState} grid={4} />
+            </div>
           </div>
         </div>
-        <div className={styles.row}>
-          <div className={styles.column}>
-            <ExposeProps className={styles.prop}>
-              <DotIcon size={80} state={"dormant"} grid={5} />
-            </ExposeProps>
-            <ExposeProps className={styles.prop}>
-              <DotIcon size={32} state={"dormant"} />
-              <DotIcon size={24} state={"dormant"} />
-              <DotIcon size={16} state={"dormant"} grid={3} />
-              <DotIcon size={12} state={"dormant"} grid={3} />
-            </ExposeProps>
-          </div>
-          <div className={styles.column}>
-            <ExposeProps className={styles.prop}>
-              <DotIcon size={80} state={"thinking"} grid={5} />
-            </ExposeProps>
-            <ExposeProps className={styles.prop}>
-              <DotIcon size={32} state={"thinking"} />
-              <DotIcon size={24} state={"thinking"} />
-              <DotIcon size={16} state={"thinking"} grid={3} />
-              <DotIcon size={12} state={"thinking"} grid={3} />
-            </ExposeProps>
-          </div>
-          <div className={styles.column}>
-            <ExposeProps className={styles.prop}>
-              <DotIcon size={80} state={"loading"} grid={5} />
-            </ExposeProps>
-            <ExposeProps className={styles.prop}>
-              <DotIcon size={32} state={"loading"} />
-              <DotIcon size={24} state={"loading"} />
-              <DotIcon size={16} state={"loading"} grid={3} />
-              <DotIcon size={12} state={"loading"} grid={3} />
-            </ExposeProps>
-          </div>
-        </div>
+
+        <ExposeProps className={`${styles.grid}`} ignoreProps={["size"]}>
+          <DotIcon size={72} state={"dormant"} />
+          <DotIcon size={24} state={"dormant"} grid={4} />
+          <DotIcon size={16} state={"dormant"} grid={3} />
+
+          <DotIcon size={72} state={"hover"} />
+          <DotIcon size={24} state={"hover"} grid={4} />
+          <DotIcon size={16} state={"hover"} grid={3} />
+
+          <DotIcon size={72} state={"thinking"} />
+          <DotIcon size={24} state={"thinking"} grid={4} />
+          <DotIcon size={16} state={"thinking"} grid={3} />
+
+          <DotIcon size={72} state={"compiling"} />
+          <DotIcon size={24} state={"compiling"} grid={4} />
+          <DotIcon size={16} state={"compiling"} grid={3} />
+
+          <DotIcon size={72} state={"organizing"} />
+          <DotIcon size={24} state={"organizing"} grid={4} />
+          <DotIcon size={16} state={"organizing"} grid={3} />
+
+          <DotIcon size={72} state={"loading"} />
+          <DotIcon size={24} state={"loading"} grid={4} />
+          <DotIcon size={16} state={"loading"} grid={3} />
+
+          <DotIcon size={72} state={"indexing"} />
+          <DotIcon size={24} state={"indexing"} grid={4} />
+          <DotIcon size={16} state={"indexing"} grid={3} />
+
+          <DotIcon size={72} state={"success"} />
+          <DotIcon size={24} state={"success"} grid={4} />
+          <DotIcon size={16} state={"success"} grid={3} />
+
+          <DotIcon size={72} state={"error"} />
+          <DotIcon size={24} state={"error"} grid={4} />
+          <DotIcon size={16} state={"error"} grid={3} />
+        </ExposeProps>
       </>
     );
   },

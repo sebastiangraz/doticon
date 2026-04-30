@@ -1,6 +1,7 @@
 export type Vec3 = { x: number; y: number; z: number };
 
-export const DOT_SIZES = [6, 8, 12, 16, 20] as const;
+export const DOT_SIZES = [8, 10, 14, 20, 26] as const;
+//OLD: export const DOT_SIZES=[6, 8, 12, 16, 20] as const;
 
 export const VIEW_SIZE = 100;
 export const SVG_PAD = 14;
@@ -13,8 +14,7 @@ export const clamp = (v: number, min: number, max: number) =>
 
 // 6 decimal places — visually indistinguishable, but keeps SSR/client
 // serialisation identical (trig/float rounding can differ across runtimes).
-export const quantizeFloat = (v: number): number =>
-  Math.round(v * 1e6) / 1e6;
+export const quantizeFloat = (v: number): number => Math.round(v * 1e6) / 1e6;
 
 // Continuous interpolation between DOT_SIZES entries.  For integer z the
 // result matches the old snapSize(); for fractional z it blends between

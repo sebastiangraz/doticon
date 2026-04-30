@@ -26,10 +26,6 @@
   color-scheme: dark;
 }
 
-:root:has(#theme-mode-toggle:checked) canvas {
-  opacity: 0.32;
-}
-
 html {
   scrollbar-gutter: stable;
 }

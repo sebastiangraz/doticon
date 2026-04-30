@@ -1,26 +1,48 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import styles from "../../index.module.css";
 import { ExposeProps } from "#/components/ExposeProps/ExposeProps";
 import DotIcon, {
   STATE_KEYS,
+  type StateKey,
   getStateUsage,
 } from "#/components/DotIcon/DotIcon";
 
-const StateKeyList = () => {
+const StateKeyList = ({ activeKey }: { activeKey: StateKey }) => {
   const filteredStates = STATE_KEYS.filter((key) => key !== "dev");
   return (
-    <>
+    <span className={styles.stateList}>
       {filteredStates.map((key, i) => (
-        <span key={key}>
+        <span key={key} className={key === activeKey ? "highlight" : undefined}>
           {i === 0 ? "" : i === filteredStates.length - 1 ? ", or " : ", "}
           <strong>{key}</strong>
         </span>
       ))}
-    </>
+    </span>
   );
 };
 
 const GuidelinesPage = () => {
+  const statesToCycle = useMemo<StateKey[]>(
+    () => STATE_KEYS.filter((key) => key !== "dev"),
+    [],
+  );
+  const [stateIndex, setStateIndex] = useState(0);
+
+  useEffect(() => {
+    if (statesToCycle.length === 0) return;
+
+    const intervalId = window.setInterval(() => {
+      setStateIndex((i) => (i + 1) % statesToCycle.length);
+    }, 2000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [statesToCycle.length]);
+
+  const dynamicState: StateKey = statesToCycle[stateIndex] ?? "dormant";
+
   return (
     <main className={styles.prose}>
       <h1>Guidelines</h1>
@@ -34,19 +56,18 @@ const GuidelinesPage = () => {
       <h1>Properties</h1>
       <ul>
         <li>
-          <code>state</code> can be set to <StateKeyList />.
+          <code>state</code> can be set to{" "}
+          <StateKeyList activeKey={dynamicState} />.
           <ExposeProps className={styles.prop} ignoreProps={["grid", "size"]}>
-            <DotIcon size={24} state={"dormant"} grid={4} />
-            <DotIcon size={24} state={"thinking"} grid={4} />
-            <DotIcon size={24} state={"processing"} grid={4} />
+            <DotIcon size={24} state={dynamicState} grid={4} />
           </ExposeProps>
         </li>
         <li>
-          <code>grid</code> integer N for an N×N grid. Treat <strong>3</strong>{" "}
-          as the small tier, <strong>4</strong> as the default, and{" "}
-          <strong>5+</strong> when you need a denser or more custom mark. Do not
-          go above <strong>7</strong> as the code is not optimized for higher
-          grids.
+          <code>grid</code> integer <i>N</i> for an <i>N×N</i> grid. Treat{" "}
+          <strong>3</strong> as the small tier, <strong>4</strong> as the
+          default, and <strong>5+</strong> when you need a denser or more custom
+          mark. Do not go above <strong>7</strong> as the code is not optimized
+          for higher grids.
           <ExposeProps className={styles.prop} ignoreProps={["state", "size"]}>
             <DotIcon size={24} grid={3} />
             <DotIcon size={24} grid={7} />
@@ -69,12 +90,12 @@ const GuidelinesPage = () => {
           >
             <DotIcon
               size={24}
-              state={"thinking"}
+              state={"compiling"}
               grid={4}
               color="light-dark(#011D28, #9EEBFF)"
             />
-            <DotIcon size={24} state={"thinking"} grid={4} color="#1E91AF" />
-            <DotIcon size={24} state={"thinking"} grid={4} />
+            <DotIcon size={24} state={"compiling"} grid={4} color="#1E91AF" />
+            <DotIcon size={24} state={"compiling"} grid={4} />
           </ExposeProps>
         </li>
       </ul>
@@ -90,9 +111,9 @@ const GuidelinesPage = () => {
 
       <h1>Embedding & Assets</h1>
       <p>
-        The playground can copy the current SVG to the clipboard — useful for
-        mocks, specs, or one-off assets. For product UI, prefer the React
-        component as it includes all motion logic.
+        The playground can copy the current SVG to the clipboard. This is useful
+        for mocks, specs, or one-off assets. For real-world interfaces, prefer
+        the React component as it includes all motion logic.
       </p>
 
       <h1>Code Hygiene</h1>
@@ -100,8 +121,8 @@ const GuidelinesPage = () => {
         <li>
           Avoid changing icon state by replacing it with a new component
           instance. This will reset the animation phase and cause a jarring
-          transition. For smooth transitions modify the <code>state</code> prop
-          directly.
+          transition. For smooth transitions between two states, modify the{" "}
+          <code>state</code> prop directly.
         </li>
         <li>
           Do not render more than <strong>10</strong> animated instances on the
@@ -118,9 +139,16 @@ const GuidelinesPage = () => {
 
       <h1>Types & Helpers</h1>
       <p>
-        Use the exported types and helpers — StateKey, STATE_KEYS,
-        getStateLabel, getStateUsage — when building menus, tests, or
-        documentation that list states in one place.
+        Use the exported types and helpers <code>StateKey</code>,{" "}
+        <code>STATE_KEYS</code>,<code>getStateLabel</code>,{" "}
+        <code>getStateUsage</code> when building menus, tests, or documentation
+        that list states in one place.
+      </p>
+      <p>
+        The codebase has a dev environment flag <code>isDevStateEnabled</code>{" "}
+        used throughout. It's used for debugging purposes while locally
+        developing. Which is why there may be discrepancies in the deployed
+        version.
       </p>
     </main>
   );

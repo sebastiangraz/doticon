@@ -1,0 +1,152 @@
+import { motion } from "motion/react";
+import DotIcon, { type StateKey } from "#/components/DotIcon/DotIcon";
+import styles from "../../index.module.css";
+import { useSequence, type SequenceStep } from "./useSequence";
+
+type StepId =
+  | "idle"
+  | "fadein"
+  | "ready"
+  | "pressing"
+  | "compiling"
+  | "error"
+  | "fadeout"
+  | "end";
+
+const STEPS: readonly SequenceStep<StepId>[] = [
+  { id: "idle", duration: 500 },
+  { id: "fadein", duration: 400 },
+  { id: "ready", duration: 900 },
+  { id: "pressing", duration: 200 },
+  { id: "compiling", duration: 4000 },
+  { id: "error", duration: 4000 },
+  { id: "fadeout", duration: 1000 },
+  { id: "end", duration: 300 },
+];
+
+const ICON_FOR_STEP: Record<StepId, StateKey> = {
+  idle: "dormant",
+  fadein: "dormant",
+  ready: "hover",
+  pressing: "hover",
+  compiling: "compiling",
+  error: "error",
+  fadeout: "error",
+  end: "dormant",
+};
+
+const Chatbox = ({ "data-label": label }: { "data-label"?: string }) => {
+  const { id, isAtOrAfter } = useSequence(STEPS);
+
+  const wrapVisible = isAtOrAfter("fadein") && !isAtOrAfter("fadeout");
+  const isGradient = isAtOrAfter("compiling") && !isAtOrAfter("error");
+  const isError = isAtOrAfter("error");
+  const isPressed = isAtOrAfter("pressing") && !isAtOrAfter("compiling");
+
+  const iconState = ICON_FOR_STEP[id];
+
+  // Drives bg/ring color + opacity vars in CSS via [data-stage="..."].
+  // "error" stays latched through fadeout/end so the red hues hold while
+  // the wrapper itself fades out via motion.
+  const stage = isError ? "error" : isGradient ? "compiling" : "idle";
+
+  return (
+    <>
+      <div
+        className={`${styles.column} ${styles.card} ${styles.chatboxCard}`}
+        data-label={label}
+      >
+        <motion.div
+          className={styles.chatbox}
+          data-stage={stage}
+          initial={{ opacity: 0, y: 5 }}
+          animate={wrapVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 5 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+        >
+          <span className={styles.chatboxInner}>
+            Ask anything
+            <motion.div
+              className={styles.chatboxSend}
+              animate={
+                isPressed
+                  ? { background: "hsla(0, 0%, 50%, 0.04)" }
+                  : { background: "hsla(0, 0%, 50%, 0)" }
+              }
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+            >
+              <DotIcon size={20} state={iconState} grid={4} />
+            </motion.div>
+          </span>
+          <div className={styles.chatboxGradient}></div>
+          <div className={styles.chatboxRing}></div>
+        </motion.div>
+        <motion.span
+          className={styles.chatboxError}
+          initial={{ opacity: 0, y: -4 }}
+          animate={isError ? { opacity: 1, y: 0 } : { opacity: 0, y: -4 }}
+          transition={{ duration: 0.22, ease: "easeOut" }}
+        >
+          Error, not connected
+        </motion.span>
+      </div>
+      <svg
+        style={{
+          position: "absolute",
+          width: 0,
+          height: 0,
+          overflow: "hidden",
+        }}
+      >
+        <defs>
+          <filter
+            id="pillSoftEdge"
+            x="-50%"
+            y="-50%"
+            width="200%"
+            height="200%"
+          >
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="13 1"
+              numOctaves="1"
+              seed="15"
+              result="noise"
+            />
+            <feDisplacementMap
+              in="SourceGraphic"
+              in2="noise"
+              scale="1.5"
+              xChannelSelector="R"
+              yChannelSelector="G"
+              result="displaced"
+            />
+            <feComposite
+              in="SourceGraphic"
+              in2="displaced"
+              operator="over"
+              result="filled"
+            />
+            <feGaussianBlur in="filled" stdDeviation="0.09" />
+          </filter>
+          <mask id="pillRingMask" maskContentUnits="objectBoundingBox">
+            {/* White pill = visible area */}
+            <rect width="1" height="1" rx="0" fill="#fff" />
+            {/* Black inner pill = transparent center, blurred for soft edge */}
+            <rect
+              x="0.07"
+              y="0.16"
+              width="0.86"
+              height="0.68"
+              rx="0.2"
+              fill="#000"
+              filter="url(#pillSoftEdge)"
+            />
+          </mask>
+        </defs>
+      </svg>
+    </>
+  );
+};
+
+export default Chatbox;
+Chatbox.displayName = "Chatbox";

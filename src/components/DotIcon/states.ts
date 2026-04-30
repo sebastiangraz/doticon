@@ -8,7 +8,6 @@ import {
   rotateY,
   lerp,
   clamp,
-  quantizeFloat,
 } from "./math";
 
 // ─── Dormant patterns ───────────────────────────────────────────────────────────
@@ -169,15 +168,24 @@ const STATE_META = {
     usage:
       "Animated accent on the dormant layout, use for interactive hover feedback.",
   },
+  ping: {
+    label: "Ping",
+    usage:
+      "One-shot ripple outward from center, use to attract attention or signal a notification.",
+  },
+  compiling: {
+    label: "Compiling",
+    usage: "Sphere motion, use for compiling, building, or “work in progress.”",
+  },
+  organizing: {
+    label: "Organizing",
+    usage:
+      "Rotating cube-style motion, use for sustained work or “running in the background.”",
+  },
   thinking: {
     label: "Thinking",
     usage:
-      "Sphere motion, use for open-ended work or “assistant is considering.”",
-  },
-  processing: {
-    label: "Processing",
-    usage:
-      "Rotating cube-style motion, use for sustained work or “running in the background.”",
+      "Cube rotating in 45° cabinet projection, use for reasoning, planning, or “AI is thinking.”",
   },
   loading: {
     label: "Loading",
@@ -216,6 +224,8 @@ export type StateDef = {
   projConfig: GridConfig;
   layoutSpeed?: number;
   opacitySpeed?: number;
+  /** Seconds after which the animation freezes (one-shot states). */
+  sequenceDuration?: number;
 };
 
 export const resolveOpacities = (
@@ -248,7 +258,7 @@ const flatGrid = (
   }));
 };
 
-// Fibonacci sphere for the thinking state.
+// Fibonacci sphere for the compiling state.
 const buildSphereBase = (config: GridConfig): Vec3[] => {
   const { dotCount } = config;
   const phi = Math.PI * (3 - Math.sqrt(5));
@@ -260,9 +270,9 @@ const buildSphereBase = (config: GridConfig): Vec3[] => {
   });
 };
 
-const THINKING_OVERSHOOT = 1.1;
+const COMPILING_OVERSHOOT = 1.1;
 
-const thinkingLayout = (
+const compilingLayout = (
   config: GridConfig,
   sphere: Vec3[],
   angle = 0,
@@ -271,14 +281,14 @@ const thinkingLayout = (
   return sphere.map((pt) => {
     const r = rotateY(pt, angle);
     return {
-      x: config.grid.center + r.x * config.grid.center * THINKING_OVERSHOOT,
-      y: config.grid.center + r.y * config.grid.center * THINKING_OVERSHOOT,
+      x: config.grid.center + r.x * config.grid.center * COMPILING_OVERSHOOT,
+      y: config.grid.center + r.y * config.grid.center * COMPILING_OVERSHOOT,
       z: baseZ * (0.5 + 0.6 * r.z),
     };
   });
 };
 
-const thinkingOpacities = (
+const compilingOpacities = (
   config: GridConfig,
   sphere: Vec3[],
   layoutAngle: number,
@@ -293,11 +303,69 @@ const thinkingOpacities = (
     return clamp(wave * depth, 0, 1);
   });
 
-// Processing: 8 cube vertices first, then the same interior grid count on
-// every face (uneven remainder skipped for the balanced pass). Extra dots use
-// unique surface positions (edge midpoints, then denser face grids) — no two
-// dots share the same quantized XYZ. Rotation is sequential — one axis ramps
-// π/2, hold, other axis ramps π/2, hold — in layoutAngle space (no blend).
+// Organizing: cube surface built from a k-sample-per-axis grid. A point is on
+// the surface whenever at least one coordinate equals ±1. Unique surface count =
+// k³ − (k−2)³. The die-5 pattern (5 per face) is a special case: 8 corners +
+// 6 face centres. Per-face dot counts are hardcoded per grid size so each size
+// can be tuned independently. Rotation is sequential — one axis ramps π/2, hold,
+// other axis ramps π/2, hold — in layoutAngle space (no blend).
+
+/**
+ * Hardcoded dots-per-face for the Organizing cube at each canonical grid size.
+ *   5  → die-5 (4 corners + 1 face centre per face)
+ *   N² → N×N regular grid per face (4, 9, 16, 25 …)
+ * Grid sizes not listed fall back to ORGANIZING_FACE_DOTS_DEFAULT.
+ */
+const ORGANIZING_FACE_DOTS: Readonly<Partial<Record<number, number>>> = {
+  3: 4, // 2×2 grid per face → 8 unique surface dots
+  4: 5, // die-5 (corners + face centres) → 14 unique surface dots
+  5: 12,
+  6: 12,
+  7: 16, // 4×4 grid per face → 56 unique surface dots (fits the 8×8 proj's 64 slots)
+};
+const ORGANIZING_FACE_DOTS_DEFAULT = 5;
+
+// The 6 canonical face projections: (u, v) ∈ [−1, 1]² → surface point.
+const CUBE_FACE_FNS: ReadonlyArray<(u: number, v: number) => Vec3> = [
+  (u, v) => ({ x: 1, y: u, z: v }),
+  (u, v) => ({ x: -1, y: u, z: v }),
+  (u, v) => ({ x: u, y: 1, z: v }),
+  (u, v) => ({ x: u, y: -1, z: v }),
+  (u, v) => ({ x: u, y: v, z: 1 }),
+  (u, v) => ({ x: u, y: v, z: -1 }),
+];
+
+/**
+ * k-sample-per-axis cube surface. Unique surface count = k³ − (k−2)³.
+ * Points are added in face-interleaved order (one point per face per round)
+ * so all 6 faces are represented even when dotCount < total unique surface.
+ */
+const buildOrganizingCubeSurface = (k: number, dotCount: number): Vec3[] => {
+  const samples = Array.from({ length: k }, (_, i) =>
+    k > 1 ? -1 + (2 * i) / (k - 1) : 0,
+  );
+  // k×k point grid per face, row-major.
+  const faceGrids = CUBE_FACE_FNS.map((fn) =>
+    samples.flatMap((u) => samples.map((v) => fn(u, v))),
+  );
+  const used = new Set<string>();
+  const key = (p: Vec3) => `${p.x},${p.y},${p.z}`;
+  const out: Vec3[] = [];
+  // Round-robin across faces so each face contributes equally when truncated.
+  for (let i = 0; i < k * k && out.length < dotCount; i++) {
+    for (let f = 0; f < 6 && out.length < dotCount; f++) {
+      const p = faceGrids[f]![i]!;
+      const k = key(p);
+      if (!used.has(k)) {
+        used.add(k);
+        out.push(p);
+      }
+    }
+  }
+  while (out.length < dotCount) out.push({ x: 0, y: 0, z: 0 });
+  return out;
+};
+
 const CUBE_CORNERS: readonly Vec3[] = [
   { x: -1, y: -1, z: -1 },
   { x: 1, y: -1, z: -1 },
@@ -309,94 +377,17 @@ const CUBE_CORNERS: readonly Vec3[] = [
   { x: 1, y: 1, z: 1 },
 ];
 
-// (u,v) in open square (-1,1)² → 3D on each face; interior-only so dots are
-// unique across faces.
-const PROCESSING_FACE_MAP: readonly ((u: number, v: number) => Vec3)[] = [
-  (u, v) => ({ x: u, y: v, z: 1 }),
-  (u, v) => ({ x: u, y: v, z: -1 }),
-  (u, v) => ({ x: 1, y: u, z: v }),
-  (u, v) => ({ x: -1, y: u, z: v }),
-  (u, v) => ({ x: u, y: 1, z: v }),
-  (u, v) => ({ x: u, y: -1, z: v }),
+// Centres of the 6 cube faces (one coordinate ±1, other two 0).
+const CUBE_FACE_CENTERS: readonly Vec3[] = [
+  { x: 0, y: 0, z: 1 },
+  { x: 0, y: 0, z: -1 },
+  { x: 1, y: 0, z: 0 },
+  { x: -1, y: 0, z: 0 },
+  { x: 0, y: 1, z: 0 },
+  { x: 0, y: -1, z: 0 },
 ];
 
-// Midpoints of the 12 edges (exactly one coordinate 0, two are ±1). They do
-// not lie in the open face interiors used by interiorFaceGrid2D.
-// prettier-ignore
-const CUBE_EDGE_MIDPOINTS: readonly Vec3[] = [
-  { x: 0, y: -1, z: -1 }, { x: 0, y: -1, z: 1 }, { x: 0, y: 1, z: -1 }, { x: 0, y: 1, z: 1 },
-  { x: -1, y: 0, z: -1 }, { x: -1, y: 0, z: 1 }, { x: 1, y: 0, z: -1 }, { x: 1, y: 0, z: 1 },
-  { x: -1, y: -1, z: 0 }, { x: -1, y: 1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 },
-];
-
-const processingVecKey = (p: Vec3): string =>
-  `${quantizeFloat(p.x)},${quantizeFloat(p.y)},${quantizeFloat(p.z)}`;
-
-/** Evenly spaced grid strictly inside (-1,1)², row-major. */
-const interiorFaceGrid2D = (count: number): { u: number; v: number }[] => {
-  if (count <= 0) return [];
-  const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
-  const rows = Math.ceil(count / cols);
-  const out: { u: number; v: number }[] = [];
-  for (let r = 0; r < rows && out.length < count; r++) {
-    for (let c = 0; c < cols && out.length < count; c++) {
-      const u = -1 + (2 * (c + 1)) / (cols + 1);
-      const v = -1 + (2 * (r + 1)) / (rows + 1);
-      out.push({ u, v });
-    }
-  }
-  return out;
-};
-
-const buildProcessingCubeBase = (dotCount: number): Vec3[] => {
-  const out: Vec3[] = [];
-  const used = new Set<string>();
-
-  const tryPush = (p: Vec3): boolean => {
-    const key = processingVecKey(p);
-    if (used.has(key)) return false;
-    used.add(key);
-    out.push(p);
-    return true;
-  };
-
-  const nCorner = Math.min(8, dotCount);
-  for (let i = 0; i < nCorner; i++) tryPush(CUBE_CORNERS[i]!);
-  if (out.length >= dotCount) return out;
-
-  const remaining = dotCount - 8;
-  const k = Math.floor(remaining / 6);
-  for (let f = 0; f < 6; f++) {
-    const map = PROCESSING_FACE_MAP[f]!;
-    for (const { u, v } of interiorFaceGrid2D(k)) {
-      tryPush(map(u, v));
-    }
-  }
-
-  for (const p of CUBE_EDGE_MIDPOINTS) {
-    if (out.length >= dotCount) break;
-    tryPush(p);
-  }
-
-  let denom = 2;
-  while (out.length < dotCount && denom < 512) {
-    for (let f = 0; f < 6 && out.length < dotCount; f++) {
-      const map = PROCESSING_FACE_MAP[f]!;
-      for (let r = 1; r <= denom && out.length < dotCount; r++) {
-        for (let c = 1; c <= denom && out.length < dotCount; c++) {
-          const u = -1 + (2 * c) / (denom + 1);
-          const v = -1 + (2 * r) / (denom + 1);
-          tryPush(map(u, v));
-        }
-      }
-    }
-    denom++;
-  }
-
-  return out;
-};
-
-const PROCESSING_SPIN = (() => {
+const RNG_SPIN = (() => {
   const rng = mulberry32(0x50_41_54_43);
   return {
     signX: rng() < 0.5 ? -1 : 1,
@@ -406,21 +397,19 @@ const PROCESSING_SPIN = (() => {
 })();
 
 /** Radians of layoutAngle for one axis ramp 0 → π/2 (linear). */
-const PROCESSING_SPIN_PHASE = 1.0;
+const SPIN_PHASE = 1.0;
 /** layoutAngle spent holding between ramps. */
-const PROCESSING_PAUSE_PHASE = 0.3;
-const PROCESSING_STEP = Math.PI / 2;
+const PAUSE_PHASE = 0.3;
+const STEP = Math.PI / 2;
 
-const processingAxisAngles = (
-  layoutAngle: number,
-): { ax: number; ay: number } => {
-  const S = PROCESSING_SPIN_PHASE;
-  const P = PROCESSING_PAUSE_PHASE;
+const axisAngles = (layoutAngle: number): { ax: number; ay: number } => {
+  const S = SPIN_PHASE;
+  const P = PAUSE_PHASE;
   const T = 2 * (S + P);
-  const step = PROCESSING_STEP;
-  const sx = PROCESSING_SPIN.signX;
-  const sy = PROCESSING_SPIN.signY;
-  const xFirst = PROCESSING_SPIN.firstAxisIsX;
+  const step = STEP;
+  const sx = RNG_SPIN.signX;
+  const sy = RNG_SPIN.signY;
+  const xFirst = RNG_SPIN.firstAxisIsX;
 
   const cycles = Math.floor(layoutAngle / T);
   const p = layoutAngle - cycles * T;
@@ -455,40 +444,36 @@ const processingAxisAngles = (
   };
 };
 
-const rotateProcessing = (p: Vec3, layoutAngle: number): Vec3 => {
-  const { ax, ay } = processingAxisAngles(layoutAngle);
+const rotateOrganizing = (p: Vec3, layoutAngle: number): Vec3 => {
+  const { ax, ay } = axisAngles(layoutAngle);
   return rotateY(rotateX(p, ax), ay);
 };
 
-const processingLayout = (
+const organizingLayout = (
   config: GridConfig,
   cube: Vec3[],
   layoutAngle = 0,
-): Vec3[] => {
-  const baseZ = gridBaseZ(config);
-  return cube.map((pt) => {
-    const r = rotateProcessing(pt, layoutAngle);
+  baseZ: number,
+): Vec3[] =>
+  cube.map((pt) => {
+    const r = rotateOrganizing(pt, layoutAngle);
     return {
       x: config.grid.center + r.x * config.grid.center * 0.85,
       y: config.grid.center + r.y * config.grid.center * 0.85,
       z: baseZ * (0.5 + 0.6 * r.z),
     };
   });
-};
 
-const processingOpacities = (
+const organizingOpacities = (
   config: GridConfig,
   cube: Vec3[],
   layoutAngle: number,
-  opacityAngle: number,
+  visibleCount: number,
 ): number[] =>
   Array.from({ length: config.dotCount }, (_, i) => {
-    const r = rotateProcessing(cube[i]!, layoutAngle);
-    const depth = (r.z + 1) / 1.5;
-    const u = (i / config.dotCount + 0.5) % 1;
-    const wave =
-      0.12 + 0.88 * (0.5 + 0.5 * Math.sin(2 * Math.PI * u + opacityAngle));
-    return clamp(wave * depth, 0, 1);
+    if (i >= visibleCount) return 0;
+    const r = rotateOrganizing(cube[i]!, layoutAngle);
+    return clamp(0.5 + r.z * 0.9, 0, 1);
   });
 
 // Loading: column-major fill order + trail.
@@ -539,9 +524,9 @@ const loadingOpacities = (
   });
 };
 
-// Hover: a sine pulse travels an invisible S-path (mirrored Z with serifs)
-// through the grid. Each dot's rank is its nearest-point arc-length along the
-// polyline, normalized to [0,1]. Works uniformly for any grid size.
+// Thinking (S-path pulse): a sine pulse travels an invisible S-path (mirrored Z
+// with serifs) through the grid. Each dot's rank is its nearest-point arc-length
+// along the polyline, normalized to [0,1]. Works uniformly for any grid size.
 const HOVER_SPEED = 0.7;
 const HOVER_PULSE_WIDTH = 0.8;
 const HOVER_NUM_WAVES = 1;
@@ -556,7 +541,7 @@ const HOVER_PATH: { x: number; y: number }[] = [
   { x: 0, y: 1 },  // bottom-left   (←)
 ];
 
-const buildHoverRanks = (n: number): number[] => {
+const buildThinkingRanks = (n: number): number[] => {
   const max = n - 1;
   const pts = HOVER_PATH.map((p) => ({ x: p.x * max, y: p.y * max }));
 
@@ -604,7 +589,7 @@ const buildHoverRanks = (n: number): number[] => {
   });
 };
 
-const hoverPulse = (phase: number, rank: number): number => {
+const thinkingPulse = (phase: number, rank: number): number => {
   let best = 0;
   for (let w = 0; w < HOVER_NUM_WAVES; w++) {
     const t = (((phase + w / HOVER_NUM_WAVES - rank) % 1) + 1) % 1;
@@ -615,7 +600,7 @@ const hoverPulse = (phase: number, rank: number): number => {
   return best;
 };
 
-const hoverLayout = (
+const thinkingLayout = (
   proj: GridConfig,
   ranks: number[],
   baseZ: readonly number[],
@@ -626,12 +611,12 @@ const hoverLayout = (
     const x = i % proj.n;
     const y = Math.floor(i / proj.n);
     const bz = baseZ[i]!;
-    const p = hoverPulse(phase, ranks[i]!);
+    const p = thinkingPulse(phase, ranks[i]!);
     return { x, y, z: lerp(bz, Math.max(0, bz - 2), p) };
   });
 };
 
-const hoverOpacities = (
+const thinkingOpacities = (
   proj: GridConfig,
   ranks: number[],
   baseOpa: readonly number[],
@@ -641,7 +626,7 @@ const hoverOpacities = (
   return Array.from({ length: proj.dotCount }, (_, i) => {
     const base = baseOpa[i]!;
     if (base === 0) return 0;
-    const p = hoverPulse(phase, ranks[i]!);
+    const p = thinkingPulse(phase, ranks[i]!);
     return lerp(base, 0.12, p);
   });
 };
@@ -782,6 +767,129 @@ const indexingOpacities = (
   return out;
 };
 
+// ─── Ping ───────────────────────────────────────────────────────────────────────
+// One-shot ripple from centre outward on the dormant layout.
+//
+// Model (mirrors loadingLayout in spirit): the dormant layout is the rest
+// state. A single wave front sweeps outward in ring-distance space; as
+// it crosses a dot, that dot's target dips briefly toward a shrunken Z
+// / dimmed opacity, then returns. The wave is fired twice with a short
+// quiet gap between passes. Rest state = dormant naturally, so after the
+// final pass all targets collapse back to baseline. The spring layer
+// supplies all smoothing — there are no discrete phases.
+//
+// Ring distances are normalised to [0, 1] (0 = centre, 1 = corner) so the
+// timing constants are independent of grid size.
+
+const PING_SPEED = 3; // angle units / second
+const PING_DIP = 2; // Z units the dip pulls each dot down
+const PING_TAIL = 1.25; // width (in ring-dist units) of the ring pulse
+const PING_PASS_OFFSET = 0.1 + PING_TAIL + 1; // wave clears + quiet gap
+const PING_TOTAL_ANGLE = PING_PASS_OFFSET + 1 + PING_TAIL;
+/** Seconds until the animation is completely done and can be frozen. */
+const PING_SEQ_DURATION = (PING_TOTAL_ANGLE + 0.3) / PING_SPEED;
+
+const buildPingRingDists = (proj: GridConfig): number[] => {
+  const cx = proj.grid.center;
+  const maxDist = Math.sqrt(2) * cx; // Euclidean distance from centre to corner
+  return Array.from({ length: proj.dotCount }, (_, i) => {
+    const dx = (i % proj.n) - cx;
+    const dy = Math.floor(i / proj.n) - cx;
+    return maxDist > 0 ? Math.sqrt(dx * dx + dy * dy) / maxDist : 0;
+  });
+};
+
+// Parabolic tent peaking at the midpoint of (0, tail), zero outside.
+const pingTent = (d: number, tail: number): number => {
+  if (d <= 0 || d >= tail) return 0;
+  const u = d / tail;
+  return 4 * u * (1 - u);
+};
+
+// Dip intensity [0..1] at the given angle for a dot at normalised ring
+// distance `rd`. Peaks as the ring wave front crosses the dot; the same
+// wave is fired twice, offset in time.
+const pingIntensity = (angle: number, rd: number): number => {
+  const a = angle - rd;
+  return Math.max(
+    pingTent(a, PING_TAIL),
+    pingTent(a - PING_PASS_OFFSET, PING_TAIL),
+  );
+};
+
+const pingLayout = (
+  proj: GridConfig,
+  ringDists: number[],
+  baseZ: readonly number[],
+  angle = 0,
+): Vec3[] =>
+  Array.from({ length: proj.dotCount }, (_, i) => {
+    const bz = baseZ[i]!;
+    const dipZ = Math.max(0, bz - PING_DIP);
+    const t = pingIntensity(angle, ringDists[i]!);
+    return {
+      x: i % proj.n,
+      y: Math.floor(i / proj.n),
+      z: lerp(bz, dipZ, t),
+    };
+  });
+
+const pingOpacities = (
+  proj: GridConfig,
+  ringDists: number[],
+  baseOpa: readonly number[],
+  angle: number,
+): number[] =>
+  Array.from({ length: proj.dotCount }, (_, i) => {
+    const base = baseOpa[i]!;
+    if (base === 0) return 0;
+    const t = pingIntensity(angle, ringDists[i]!);
+    return lerp(base, 0.12, t);
+  });
+
+// ─── Hover (ring pulse) ────────────────────────────────────────────────────────
+// Continuous looping ring ripple from centre, based on ping's tent shape but
+// repeating indefinitely at a gentler pace.
+
+const HOVER_RING_SPEED = 1.5;
+const HOVER_RING_TAIL = PING_TAIL;
+const HOVER_RING_CYCLE = 1 + HOVER_RING_TAIL + 0.5; // sweep + tail + gap
+
+const hoverRingIntensity = (angle: number, rd: number): number => {
+  const phase =
+    ((angle % HOVER_RING_CYCLE) + HOVER_RING_CYCLE) % HOVER_RING_CYCLE;
+  return pingTent(phase - rd, HOVER_RING_TAIL);
+};
+
+const hoverRingLayout = (
+  proj: GridConfig,
+  ringDists: number[],
+  baseZ: readonly number[],
+  angle = 0,
+): Vec3[] =>
+  Array.from({ length: proj.dotCount }, (_, i) => {
+    const bz = baseZ[i]!;
+    const t = hoverRingIntensity(angle, ringDists[i]!);
+    return {
+      x: i % proj.n,
+      y: Math.floor(i / proj.n),
+      z: lerp(bz, Math.max(0, bz - PING_DIP), t),
+    };
+  });
+
+const hoverRingOpacities = (
+  proj: GridConfig,
+  ringDists: number[],
+  baseOpa: readonly number[],
+  angle: number,
+): number[] =>
+  Array.from({ length: proj.dotCount }, (_, i) => {
+    const base = baseOpa[i]!;
+    if (base === 0) return 0;
+    const t = hoverRingIntensity(angle, ringDists[i]!);
+    return lerp(base, 0.12, t);
+  });
+
 // ─── Error ──────────────────────────────────────────────────────────────────────
 // X pattern (main + anti diagonal) with an outward ripple. Non-X dots stay at
 // 0.12 / baseZ. Wave expands by Chebyshev ring so all four arms move together.
@@ -831,7 +939,7 @@ const errorLayout = (
   return Array.from({ length: dotCount }, (_, i) => {
     const x = i % n;
     const y = Math.floor(i / n);
-    if (err.ring[i] < 0) return { x, y, z: baseZ };
+    if (err.ring[i] < 0) return { x, y, z: baseZ - 1 };
     const d = w - err.ring[i];
     // Only echoes dip Z — leading edge stays at baseZ.
     const dip = clamp(0.5 * tent(d - 1) + 0.25 * tent(d - 2), 0, 1);
@@ -855,7 +963,49 @@ const errorOpacities = (
   });
 };
 
+// ─── Thinking ───────────────────────────────────────────────────────────────────
+// Cube rendered in a 45° cabinet projection, rotating continuously in 3D.
+// Rotation axis is world-space (1, 1, 0)/√2 — the unique axis (given a 45°
+// cabinet) under which every dot's screen-space velocity stays locked to the
+// cabinet diagonal. Consequence: front/back face pairs always slide along
+// parallel diagonals, never crossing through each other in Z. The cube reads
+// as a cabinet drawing throughout the entire loop instead of drifting into
+// free perspective tumbling after the first quarter turn.
+//
+// Front-bottom-left vertex (−1, +1, −1 in SVG y-down space) travels from the
+// screen's bottom-left to back-top-right at θ=π and returns at θ=2π.
+// Depth (z) and opacity are intentionally flat at this stage — layout-only.
+
+// Dice-5 cube: 8 corners + 6 face centres = 14 unique surface dots.
+// Used by the organizing state's default face layout.
+const THINKING_DICE5_COUNT = 8 + 6;
+
+// 8 cube corners, then 6 face centres, then padding slots. Padding positions
+// don't matter — the organizing state masks them to opacity 0.
+const buildThinkingCubeBase = (dotCount: number): Vec3[] => {
+  const out: Vec3[] = [];
+  for (let i = 0; i < Math.min(8, dotCount); i++) out.push(CUBE_CORNERS[i]!);
+  for (let i = 0; i < 6 && out.length < dotCount; i++)
+    out.push(CUBE_FACE_CENTERS[i]!);
+  while (out.length < dotCount) out.push({ x: 0, y: 0, z: 0 });
+  return out;
+};
+
 // ─── Build ──────────────────────────────────────────────────────────────────────
+
+/** 3×3 → 4×4, 7×7 → 8×8 so cube projections have enough dot slots. */
+const cubeProj = (config: GridConfig): GridConfig =>
+  config.n === 3
+    ? buildGridConfig(4)
+    : config.n === 7
+      ? buildGridConfig(8)
+      : config;
+
+/** Bump a GridConfig until it holds at least `minDots` slots. */
+const ensureSlots = (proj: GridConfig, minDots: number): GridConfig =>
+  proj.dotCount >= minDots
+    ? proj
+    : buildGridConfig(Math.ceil(Math.sqrt(minDots)));
 
 export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const dormantProj = config.n === 3 ? buildGridConfig(4) : config;
@@ -865,10 +1015,25 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
   const successProj = config.n === 3 ? buildGridConfig(4) : config;
   const successZ = buildSuccessZ(config.n);
   const successOpa = buildSuccessOpacities(config.n);
-  const hoverBaseZ = flatGrid(dormantProj, dormantZ).map((p) => p.z);
-  const hoverRanks = buildHoverRanks(dormantProj.n);
+  const dormantBaseZ = flatGrid(dormantProj, dormantZ).map((p) => p.z);
+  const thinkingRanks = buildThinkingRanks(dormantProj.n);
+  const pingRingDists = buildPingRingDists(dormantProj);
   const sphere = buildSphereBase(config);
-  const processingCube = buildProcessingCubeBase(config.dotCount);
+  // Organizing: cube with face-density control. Dice-5 reuses Thinking's
+  // corner+center geometry; larger face counts use the k×k surface builder.
+  const organizingFaceDots =
+    ORGANIZING_FACE_DOTS[config.n] ?? ORGANIZING_FACE_DOTS_DEFAULT;
+  const orgDice5 = organizingFaceDots === 5;
+  const orgK = orgDice5 ? 0 : Math.round(Math.sqrt(organizingFaceDots));
+  const orgUnique = orgDice5
+    ? THINKING_DICE5_COUNT
+    : orgK ** 3 - Math.max(0, orgK - 2) ** 3;
+  const organizingProj = ensureSlots(cubeProj(config), orgUnique);
+  const organizingCube = orgDice5
+    ? buildThinkingCubeBase(organizingProj.dotCount)
+    : buildOrganizingCubeSurface(orgK, organizingProj.dotCount);
+  const organizingVisible = Math.min(orgUnique, organizingProj.dotCount);
+  const organizingBaseZ = gridBaseZ(config);
   const ranks = buildLoadingRanks(config);
   const errorData = buildErrorData(config);
   const indexingSeq = buildIndexingSequence(config);
@@ -890,37 +1055,69 @@ export const buildStates = (config: GridConfig): Record<StateKey, StateDef> => {
     },
     hover: {
       label: STATE_META.hover.label,
-      layout: (a = 0) => hoverLayout(dormantProj, hoverRanks, hoverBaseZ, a),
+      layout: (a = 0) =>
+        hoverRingLayout(dormantProj, pingRingDists, dormantBaseZ, a),
       opacities: (ctx) =>
-        hoverOpacities(dormantProj, hoverRanks, dormantOpa, ctx.opacityAngle),
-      animated: true,
-      layoutSpeed: HOVER_SPEED,
-      projConfig: dormantProj,
-    },
-    thinking: {
-      label: STATE_META.thinking.label,
-      layout: (a = 0) => thinkingLayout(config, sphere, a),
-      opacities: (ctx) =>
-        thinkingOpacities(config, sphere, ctx.layoutAngle, ctx.opacityAngle),
-      animated: true,
-      layoutSpeed: 2.5,
-      opacitySpeed: 4,
-      projConfig: config,
-    },
-    processing: {
-      label: STATE_META.processing.label,
-      layout: (a = 0) => processingLayout(config, processingCube, a),
-      opacities: (ctx) =>
-        processingOpacities(
-          config,
-          processingCube,
-          ctx.layoutAngle,
+        hoverRingOpacities(
+          dormantProj,
+          pingRingDists,
+          dormantOpa,
           ctx.opacityAngle,
         ),
       animated: true,
+      layoutSpeed: HOVER_RING_SPEED,
+      projConfig: dormantProj,
+    },
+    ping: {
+      label: STATE_META.ping.label,
+      layout: (a = 0) =>
+        pingLayout(dormantProj, pingRingDists, dormantBaseZ, a),
+      opacities: (ctx) =>
+        pingOpacities(dormantProj, pingRingDists, dormantOpa, ctx.opacityAngle),
+      animated: true,
+      layoutSpeed: PING_SPEED,
+      sequenceDuration: PING_SEQ_DURATION,
+      projConfig: dormantProj,
+    },
+    compiling: {
+      label: STATE_META.compiling.label,
+      layout: (a = 0) => compilingLayout(config, sphere, a),
+      opacities: (ctx) =>
+        compilingOpacities(config, sphere, ctx.layoutAngle, ctx.opacityAngle),
+      animated: true,
       layoutSpeed: 2.5,
       opacitySpeed: 4,
       projConfig: config,
+    },
+    organizing: {
+      label: STATE_META.organizing.label,
+      layout: (a = 0) =>
+        organizingLayout(organizingProj, organizingCube, a, organizingBaseZ),
+      opacities: (ctx) =>
+        organizingOpacities(
+          organizingProj,
+          organizingCube,
+          ctx.layoutAngle,
+          organizingVisible,
+        ),
+      animated: true,
+      layoutSpeed: 2.5,
+      projConfig: organizingProj,
+    },
+    thinking: {
+      label: STATE_META.thinking.label,
+      layout: (a = 0) =>
+        thinkingLayout(dormantProj, thinkingRanks, dormantBaseZ, a),
+      opacities: (ctx) =>
+        thinkingOpacities(
+          dormantProj,
+          thinkingRanks,
+          dormantOpa,
+          ctx.opacityAngle,
+        ),
+      animated: true,
+      layoutSpeed: HOVER_SPEED,
+      projConfig: dormantProj,
     },
     loading: {
       label: STATE_META.loading.label,
